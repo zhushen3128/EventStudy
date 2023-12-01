@@ -521,16 +521,17 @@ server = function(input, output){
             
             ctrl_year_ubound <- max(as.numeric(data_study$year[data_study$time_til==input$t1_1-input$t0_1]))
             ctrl_year_lbound <- min(as.numeric(data_study$year[data_study$time_til==input$t1_1-input$t0_1]))
-            
+            ctrl_years <- as.numeric(data_study$year[data_study$time_til==input$t1_1-input$t0_1])
             
             if (input$homogeneity) {
                 panelview_data = panelview_data %>% 
                     mutate(four_group_ind = 
                                ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                                      ifelse(between(year, ctrl_year_lbound, ctrl_year_ubound) & time_til == -999, "control", "invalid")), 
+                                      ifelse(between(year, ctrl_year_lbound, ctrl_year_ubound) & 
+                                                 time_til == -999 &
+                                                 year %in% ctrl_years, "control", "invalid")), 
                            year = factor(year, level = min(year):max(year))
                     ) 
-                
                 
             } else {
                 panelview_data = panelview_data %>% 
