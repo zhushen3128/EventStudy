@@ -881,58 +881,58 @@ ui <- fluidPage(
                                     tableOutput("balance3_ess")
                                 ))
                         )
-               ), 
-               
-               tabPanel("Sample Influence",
-                        sidebarLayout(
-                            sidebarPanel(
-                                h4("Estimand"), 
-                                selectInput("estimand_5", "Choose the estimand:",
-                                            c(
-                                                #"ATE_{t0, >t0, t1}" = "new5",
-                                                "ATE_{t0, inf, t1}" = "std5")), 
-                                withMathJax(),
-                                helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
-                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
-                     time at time \\(t_0\\) to never adopting the treatment.'), 
-                                sliderInput("t0_5",
-                                            "What is the t0 in the target estimand? ", 
-                                            value = 1980, 
-                                            min = 1964,
-                                            max = 1996), 
-                                withMathJax(),
-                                helpText('\\(t_0\\) denotes the treatment initiation time.'),
-                                
-                                sliderInput("t1_5",
-                                            "What is the t1 in the target estimand? ", 
-                                            value = 1985, 
-                                            min = 1964,
-                                            max = 1996), 
-                                withMathJax(),
-                                helpText('\\(t_1\\) denotes the time of observation.'),
-                                
-                                # Horizontal line 
-                                tags$hr(), 
-                                checkboxInput("sic", 'Show exact SIC of each observation.', FALSE), 
-                                checkboxInput("sic_scaled", 'Show scaled SIC of each observation.', FALSE), 
-                                checkboxInput("est_change", 'Show change of point estimate due to each observation.', FALSE)
-                                
-                            ),
-                            mainPanel(
-                                conditionalPanel(
-                                    condition = "input.sic",
-                                    plotlyOutput("infuence_plot")
-                                ),
-                                conditionalPanel(
-                                    condition = "input.sic_scaled",
-                                    plotlyOutput("infuence_plot")
-                                ),
-                                conditionalPanel(
-                                    condition = "input.est_change",
-                                    plotlyOutput("infuence_plot")
-                                ))
-                        )
                )
+               
+               # tabPanel("Sample Influence",
+               #          sidebarLayout(
+               #              sidebarPanel(
+               #                  h4("Estimand"), 
+               #                  selectInput("estimand_5", "Choose the estimand:",
+               #                              c(
+               #                                  #"ATE_{t0, >t0, t1}" = "new5",
+               #                                  "ATE_{t0, inf, t1}" = "std5")), 
+               #                  withMathJax(),
+               #                  helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
+               #        effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
+               #       time at time \\(t_0\\) to never adopting the treatment.'), 
+               #                  sliderInput("t0_5",
+               #                              "What is the t0 in the target estimand? ", 
+               #                              value = 1980, 
+               #                              min = 1964,
+               #                              max = 1996), 
+               #                  withMathJax(),
+               #                  helpText('\\(t_0\\) denotes the treatment initiation time.'),
+               #                  
+               #                  sliderInput("t1_5",
+               #                              "What is the t1 in the target estimand? ", 
+               #                              value = 1985, 
+               #                              min = 1964,
+               #                              max = 1996), 
+               #                  withMathJax(),
+               #                  helpText('\\(t_1\\) denotes the time of observation.'),
+               #                  
+               #                  # Horizontal line 
+               #                  tags$hr(), 
+               #                  checkboxInput("sic", 'Show exact SIC of each observation.', FALSE), 
+               #                  checkboxInput("sic_scaled", 'Show scaled SIC of each observation.', FALSE), 
+               #                  checkboxInput("est_change", 'Show change of point estimate due to each observation.', FALSE)
+               #                  
+               #              ),
+               #              mainPanel(
+               #                  conditionalPanel(
+               #                      condition = "input.sic",
+               #                      plotlyOutput("infuence_plot")
+               #                  ),
+               #                  conditionalPanel(
+               #                      condition = "input.sic_scaled",
+               #                      plotlyOutput("infuence_plot")
+               #                  ),
+               #                  conditionalPanel(
+               #                      condition = "input.est_change",
+               #                      plotlyOutput("infuence_plot")
+               #                  ))
+               #          )
+               # )
                
     )
 )
