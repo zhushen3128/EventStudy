@@ -417,7 +417,8 @@ GetESS = function(estimand, t0, t1, method = c("twfe", "balance1", "balance2", "
                           ratio_ess_to_ss = ess / ss) %>% ungroup() %>% 
                 mutate(percent_of_each = ratio_ess_to_ss / sum(ratio_ess_to_ss, na.rm = T))
             data_study_augment_ess =  rbind(data_study_augment_ess, 
-                                             data.frame(group_ind='total', t(colSums(data_study_augment_ess[, -1]))))
+                                            data.frame(group_ind='total', t(colSums(data_study_augment_ess[, -1]))))
+            data_study_augment_ess[nrow(data_study_augment_ess), "ess"] = NA
         } else {
             data_study_augment_ess = data_study_augment %>% 
                 group_by(group_ind) %>% 
@@ -427,6 +428,7 @@ GetESS = function(estimand, t0, t1, method = c("twfe", "balance1", "balance2", "
                 mutate(percent_of_each = ratio_ess_to_ss / sum(ratio_ess_to_ss, na.rm = T))
             data_study_augment_ess =  rbind(data_study_augment_ess, 
                                             data.frame(group_ind='total', t(colSums(data_study_augment_ess[, -1], na.rm = T))))
+            data_study_augment_ess[nrow(data_study_augment_ess), "ess"] = NA
         }
         rownames(data_study_augment_ess) = NULL 
         colnames(data_study_augment_ess) = c("Group of Observation", 
@@ -754,11 +756,7 @@ ui <- fluidPage(
                                                     max = 1996)
                                     ), 
                                     checkboxInput("shade", 'Show differential implied weights (colored with shade)', FALSE)
-                                ), 
-                                
-                                tags$hr(), 
-                                h5("Implied Weighted Years"), 
-                                checkboxInput("implied_year", 'Show implied weighted years', FALSE)
+                                )
                             ), 
                             mainPanel(plotOutput("implied"))
                         )
@@ -1332,6 +1330,10 @@ server = function(input, output){
     output$estimates = renderTable({
         
         EstimateLeadLag = function(estimand, t0, t1) {
+            
+            # define the valid control lead lag range
+            time_til_ubound <- t1-t0
+            time_til_lbound <- t1-max(data_study$year)
             
             if (estimand == "std") {
                 # Simple Average 
