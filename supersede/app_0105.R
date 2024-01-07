@@ -148,14 +148,8 @@ lead_lag_covariates <- c(
 ##    Helper functions 
 #######################################################################
 
-ESS <- function(w) {
-    num <- sum(abs(w))^2
-    den <- sum(w^2)
-    ess <- num/den
-    return(ess)
-}
-
 PlotESS = function(estimand, t0, t1) {
+    
     target_name = ifelse(t1 >= t0, paste0("lag_", t1-t0, sep=""), paste0("lead_", t0-t1, sep=""))
     
     if (estimand == "std") {
@@ -346,8 +340,10 @@ GetESS = function(estimand, t0, t1, method = c("twfe", "balance1", "balance2", "
             # Solve for the Average Treatment Effect on the Treated, ATT (default)
             sbwatt_object_1 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
             if (!is.null(sbwatt_object_1)) {
-                sbwatt_weight_set1 = sbwatt_object_1$dat_weights %>% dplyr::select(X, sbw_weights) 
-                data_study_augment = data_study_augment %>% left_join(sbwatt_weight_set1, by = "X")
+                sbwatt_weight_set1 = sbwatt_object_1$dat_weights %>% 
+                    dplyr::select(X, sbw_weights) 
+                data_study_augment = data_study_augment %>% 
+                    left_join(sbwatt_weight_set1, by = "X")
                 data_study_augment$sbw_weights = replace(data_study_augment$sbw_weights, 
                                                          is.na(data_study_augment$sbw_weights), 0)
             } 
@@ -374,8 +370,10 @@ GetESS = function(estimand, t0, t1, method = c("twfe", "balance1", "balance2", "
             # Solve for the Average Treatment Effect on the Treated, ATT (default)
             sbwatt_object_2 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
             if (!is.null(sbwatt_object_2)) {
-                sbwatt_weight_set2 = sbwatt_object_2$dat_weights %>% dplyr::select(X, sbw_weights)  
-                data_study_augment = data_study_augment %>% left_join(sbwatt_weight_set2, by = "X")
+                sbwatt_weight_set2 = sbwatt_object_2$dat_weights %>% 
+                    dplyr::select(X, sbw_weights)  
+                data_study_augment = data_study_augment %>% 
+                    left_join(sbwatt_weight_set2, by = "X")
                 data_study_augment$sbw_weights = replace(data_study_augment$sbw_weights, 
                                                          is.na(data_study_augment$sbw_weights), 0)
             } 
@@ -508,55 +506,59 @@ PlotInfluence = function(inf_all, estimand, t0, t1, metric) {
         }
         labels1 <- rep("",nrow(data_study_augment))
         labels1[show.r] <- as.character(show.r)
-    
+        
+        
         plot_data = data_study_augment %>% 
             mutate(sic = inf_all$inf, 
                    sic_scaled = inf_all$inf_scaled, 
                    est_change = inf_all$est_change) %>% 
             rename(female_suicide = asmrs) %>% 
-            dplyr::select(X, state, year, female_suicide, treat_start_year, 
-                          group_ind, sic, sic_scaled, est_change)
+            dplyr::select(X, state, year, female_suicide, group_ind, sic, sic_scaled, est_change)
         
         if (metric == "sic") {
             plt = ggplot(plot_data, aes(x = X, xend = X, y = 0, yend = sic, 
-                                            state = state, year = year, treat_start_year = treat_start_year, 
-                                            female_suicide = female_suicide, 
-                                            group = group_ind, color = group_ind)) +
-                    geom_segment(linetype = "solid", linewidth = 0.3) + 
-                    labs(x = "Observation Index", y = "SIC") +
-                    geom_text(aes(x = X, y = sic, label = labels1), size = 3, vjust = -1) +
-                    scale_color_manual(values = ess_obs_colors) +
-                    theme_bw()
+                                         state = state, year = year, female_suicide = female_suicide, 
+                                         group = group_ind, color = group_ind)) +
+                geom_segment(linetype = "solid", linewidth = 0.3) + 
+                labs(x = "Observation Index", y = "SIC") +
+                ylim(min(plot_data$sic), max(plot_data$sic)) +
+                geom_text(aes(x = X, y = sic, label = labels1), size = 3, vjust = -1) +
+                scale_color_manual(values = ess_obs_colors) +
+                theme_bw()
             plt
+            # ggplotly(fig1, tooltip = c("group", "state", "year","female_suicide","sic"))
             
         } else if (metric == "sic_scaled") {
             plt = ggplot(plot_data, aes(x = X, xend = X, y = 0, yend = sic_scaled, 
-                                        state = state, year = year, treat_start_year = treat_start_year, 
-                                        female_suicide = female_suicide, 
-                                        group = group_ind, color = group_ind)) +
+                                         state = state, year = year, female_suicide = female_suicide, 
+                                         group = group_ind, color = group_ind)) +
                 geom_segment(linetype = "solid", linewidth = 0.3) + 
                 labs(x = "Observation Index", y = "SIC Scaled") +
+                ylim(min(plot_data$sic_scaled), max(plot_data$sic_scaled)) +
                 geom_text(aes(x = X, y = sic_scaled, label = labels1), size = 3, vjust = -1) +
                 scale_color_manual(values = ess_obs_colors) +
                 theme_bw()
+            # ggplotly(fig1, tooltip = c("group", "state", "year","female_suicide","sic_scaled"))
             plt
             
         } else {
             plt = ggplot(plot_data, aes(x = X, xend = X, y = 0, yend = est_change, 
-                                        state = state, year = year, treat_start_year = treat_start_year, 
-                                        female_suicide = female_suicide, 
-                                        group = group_ind, color = group_ind)) +
+                                         state = state, year = year, female_suicide = female_suicide, 
+                                         group = group_ind, color = group_ind)) +
                 geom_segment(linetype = "solid", linewidth = 0.3) + 
-                labs(x = "Observation Index", y = "Change in Point Estimate") +
+                labs(x = "Observation Index", y = "SIC Scaled") +
+                ylim(min(plot_data$est_change), max(plot_data$est_change)) +
                 geom_text(aes(x = X, y = est_change, label = labels1), size = 3, vjust = -1) +
                 scale_color_manual(values = ess_obs_colors) +
                 theme_bw()
+            # ggplotly(fig1, tooltip = c("group", "state", "year","female_suicide","est_change"))
             plt
         }
     }
 }
 
 GetInfluence = function(estimand, t0, t1) {
+    
     target_name = ifelse(t1 >= t0, paste0("lag_", t1-t0, sep=""), paste0("lead_", t0-t1, sep=""))
     event_study_formula2 = as.formula(
         paste("asmrs ~ ",
@@ -572,8 +574,8 @@ GetInfluence = function(estimand, t0, t1) {
                                          estimand = "ATT", method = "URI", 
                                          treat = target_name)
         weight_original = lmw_att_out2_original$weights
-        act_index = which(data_study_augment$time_til==t1-t0)
-        non_index = which(data_study_augment$time_til!=t1-t0)
+        act_index <- which(data_study_augment$time_til==t1-t0)
+        non_index <- which(data_study_augment$time_til!=t1-t0)
         w_act = weight_original[act_index]
         w_non = weight_original[non_index]
         y_act = data_study_augment$asmrs[act_index]
@@ -591,8 +593,9 @@ GetInfluence = function(estimand, t0, t1) {
             y_noi_act = data_noi$asmrs[which(data_noi$X %in% act_index_noi)]
             y_noi_non = data_noi$asmrs[which(data_noi$X %in% non_index_noi)]
             T_F_noi = sum(y_noi_act*w_noi_act) - sum(y_noi_non*w_noi_non)
-            inf_i = nrow(data_noi)*(T_F_noi-T_F)
+            inf_i = (nrow(data)-1)*(T_F_noi-T_F)
             est_change_i = T_F_noi-T_F
+            
             return(c(inf_i, est_change_i))
         }
         
@@ -666,6 +669,7 @@ ui <- fluidPage(
                                 conditionalPanel(
                                     condition = "input.invariance",
                                     checkboxInput("anticipation", 'Limited Treatment Anticipation.', FALSE), 
+                                    
                                     checkboxInput("washout", 'Washout of Treatment Effect.', FALSE)
                                 ), 
                                 
@@ -853,9 +857,9 @@ ui <- fluidPage(
                                 # Horizontal line 
                                 tags$hr(), 
                                 checkboxInput("twfe", 'Compute ESS for TWFE approach.', FALSE), 
-                                checkboxInput("balance1", 'Compute ESS for balancing Approach under ideal experiment setup.', FALSE), 
-                                checkboxInput("balance2", 'Compute ESS for balancing Approach under time shift invariance.', FALSE), 
-                                checkboxInput("balance3", 'Compute ESS for balancing Approach using all observations.', FALSE)
+                                checkboxInput("balance1", 'Compute ESS for balancing Appraoch under ideal experiment setup.', FALSE), 
+                                checkboxInput("balance2", 'Compute ESS for balancing Appraoch under time shift invariance.', FALSE), 
+                                checkboxInput("balance3", 'Compute ESS for balancing Appraoch using all observations.', FALSE)
                                 
                             ),
                             mainPanel(
@@ -877,51 +881,58 @@ ui <- fluidPage(
                                     tableOutput("balance3_ess")
                                 ))
                         )
-               ), 
-               
-               tabPanel("Sample Influence",
-                        sidebarLayout(
-                            sidebarPanel(
-                                 h4("Estimand"), 
-                                selectInput("estimand_5", "Choose the estimand:",
-                                            c(
-                                                #"ATE_{t0, >t0, t1}" = "new5",
-                                                "ATE_{t0, inf, t1}" = "std5")),
-                                withMathJax(),
-                                helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal
-                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first
-                     time at time \\(t_0\\) to never adopting the treatment.'),
-                                sliderInput("t0_5",
-                                            "What is the t0 in the target estimand? ",
-                                            value = 1980,
-                                            min = 1964,
-                                            max = 1996),
-                                withMathJax(),
-                                helpText('\\(t_0\\) denotes the treatment initiation time.'),
-
-                                sliderInput("t1_5",
-                                            "What is the t1 in the target estimand? ",
-                                            value = 1985,
-                                            min = 1964,
-                                            max = 1996),
-                                withMathJax(),
-                                helpText('\\(t_1\\) denotes the time of observation.'),
-
-                                # Horizontal line
-                                tags$hr(),
-                                
-                                selectInput("influence_metric", "What influence metric to show:",
-                                            c("Change of point estimate due to each observation." = "est_change", 
-                                              "Exact SIC of each observation." = "sic",
-                                              "Scaled SIC of each observation." = "sic_scaled"))
-
-                            ), 
-                             mainPanel(
-                                plotOutput("infuence_plot_panel"), 
-                                plotlyOutput("infuence_plot")
-                             )
-                        )
                )
+               
+               # tabPanel("Sample Influence",
+               #          sidebarLayout(
+               #              sidebarPanel(
+               #                  h4("Estimand"), 
+               #                  selectInput("estimand_5", "Choose the estimand:",
+               #                              c(
+               #                                  #"ATE_{t0, >t0, t1}" = "new5",
+               #                                  "ATE_{t0, inf, t1}" = "std5")), 
+               #                  withMathJax(),
+               #                  helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
+               #        effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
+               #       time at time \\(t_0\\) to never adopting the treatment.'), 
+               #                  sliderInput("t0_5",
+               #                              "What is the t0 in the target estimand? ", 
+               #                              value = 1980, 
+               #                              min = 1964,
+               #                              max = 1996), 
+               #                  withMathJax(),
+               #                  helpText('\\(t_0\\) denotes the treatment initiation time.'),
+               #                  
+               #                  sliderInput("t1_5",
+               #                              "What is the t1 in the target estimand? ", 
+               #                              value = 1985, 
+               #                              min = 1964,
+               #                              max = 1996), 
+               #                  withMathJax(),
+               #                  helpText('\\(t_1\\) denotes the time of observation.'),
+               #                  
+               #                  # Horizontal line 
+               #                  tags$hr(), 
+               #                  checkboxInput("sic", 'Show exact SIC of each observation.', FALSE), 
+               #                  checkboxInput("sic_scaled", 'Show scaled SIC of each observation.', FALSE), 
+               #                  checkboxInput("est_change", 'Show change of point estimate due to each observation.', FALSE)
+               #                  
+               #              ),
+               #              mainPanel(
+               #                  conditionalPanel(
+               #                      condition = "input.sic",
+               #                      plotlyOutput("infuence_plot")
+               #                  ),
+               #                  conditionalPanel(
+               #                      condition = "input.sic_scaled",
+               #                      plotlyOutput("infuence_plot")
+               #                  ),
+               #                  conditionalPanel(
+               #                      condition = "input.est_change",
+               #                      plotlyOutput("infuence_plot")
+               #                  ))
+               #          )
+               # )
                
     )
 )
@@ -1480,7 +1491,7 @@ server = function(input, output){
                               paste(paste("lead_", 1:lead_min, sep = ""), collapse = " + "),
                               paste(paste("lag_", 0:lag_max, sep = ""), collapse = " + "), sep = " + "),
                           "| year + state | 0 | state"
-                    )
+                    ),
                 )
                 
                 # all observations
@@ -1640,25 +1651,39 @@ server = function(input, output){
     caption = ""
     )
     
-    inf_res = reactive({ 
-        GetInfluence(estimand = "std", t0 = input$t0_5, t1 = input$t1_5) 
-    })
-    
-    output$infuence_plot_panel = renderPlot({
-        PlotESS(estimand = "std", t0 = input$t0_5, t1 = input$t1_5)
+    output$infuence_sic = renderPlotly({
+        if (input$estimand_5 == "std5") {
+            inf_res = GetInfluence(estimand = "std", t0 = input$t0_5, t1 = input$t1_5)
+            sic_plt = PlotInfluence(inf_res, estimand = "std", t0 = input$t0_5, t1 = input$t1_5, metric = "sic")
+            sic_s_plt = PlotInfluence(inf_res, estimand = "std", t0 = input$t0_5, t1 = input$t1_5, metric = "sic_scaled")
+            change_plt = PlotInfluence(inf_res, estimand = "std", t0 = input$t0_5, t1 = input$t1_5, metric = "est_change")
+        } 
     })
     
     output$infuence_plot = renderPlotly({
-        if (input$influence_metric == "sic") {
-            change_plt = PlotInfluence(inf_res(), estimand = "std", input$t0_5, input$t1_5, metric = "sic")
-            ggplotly(change_plt, tooltip = c("group", "state", "year", "treat_start_year","female_suicide","sic"))
-        } else if (input$influence_metric == "sic_scaled") {
-            change_plt = PlotInfluence(inf_res(), estimand = "std", input$t0_5, input$t1_5, metric = "sic_scaled")
-            ggplotly(change_plt, tooltip = c("group", "state", "year", "treat_start_year","female_suicide","sic_scaled"))
-        } else {
-            change_plt = PlotInfluence(inf_res(), estimand = "std", input$t0_5, input$t1_5, metric = "est_change")
-            ggplotly(change_plt, tooltip = c("group", "state", "year", "treat_start_year","female_suicide","est_change"))
-        }
+        if (input$estimand_5 == "std5") {
+            inf_res = GetInfluence(estimand = "std", t0 = input$t0_5, t1 = input$t1_5)
+            #sic_plt = PlotInfluence(inf_res, estimand = "std", t0 = input$t0_5, t1 = input$t1_5, metric = "sic")
+            #sic_s_plt = PlotInfluence(inf_res, estimand = "std", t0 = input$t0_5, t1 = input$t1_5, metric = "sic_scaled")
+            change_plt = PlotInfluence(inf_res, estimand = "std", t0 = input$t0_5, t1 = input$t1_5, metric = "est_change")
+            ggplotly(change_plt, tooltip = c("group", "state", "year","female_suicide","sic"))
+            # plotly::subplot(sic_plt, sic_s_plt, change_plt, nrows = 3)
+        } 
+    })
+    
+    
+    output$infuence_sic_scaled = renderPlotly({
+        if (input$estimand_5 == "std5") {
+            inf_res = GetInfluence(estimand = "std", t0 = input$t0_5, t1 = input$t1_5)
+            PlotInfluence(inf_res, estimand = "std", t0 = input$t0_5, t1 = input$t1_5, metric = "sic_scaled")
+        } 
+    })
+    
+    output$infuence_est_change = renderPlotly({
+        if (input$estimand_5 == "std5") {
+            inf_res = GetInfluence(estimand = "std", t0 = input$t0_5, t1 = input$t1_5)
+            PlotInfluence(inf_res, estimand = "std", t0 = input$t0_5, t1 = input$t1_5, metric = "est_change")
+        } 
     })
 
     output$implied = renderPlot({
@@ -1809,7 +1834,7 @@ server = function(input, output){
                         geom_polygon(aes(x=long, y=lat, group=group, fill=lmw_weight), color="black", size = 0.2) +
                         scale_fill_continuous(name= paste0("Observation implied weight"),
                                               low = "#9dc4e4", high = "#3787c8", na.value = "white") +
-                        geom_text(data = map_plot_data, aes(c_long, c_lat, label = state),
+                        geom_text(data = map_center_plot_data, aes(c_long, c_lat, label = state),
                                   color = "black", size = 5) +
                         ggthemes::theme_map() + implied_plot_tyle
                 } else {
@@ -1818,7 +1843,7 @@ server = function(input, output){
                         na.omit() %>%
                         ggplot() +
                         geom_polygon(aes(x=long, y=lat, group=group), fill="white", color="black", size = 0.2) +
-                        geom_text(data = state_data, aes(c_long, c_lat, label = state),
+                        geom_text(data = map_center_plot_data, aes(c_long, c_lat, label = state),
                                   color = "black", size = 5) +
                         ggthemes::theme_map() + implied_plot_tyle  
                 }
