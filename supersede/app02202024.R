@@ -178,6 +178,7 @@ PlotESS = function(estimand, t0, t1) {
   target_name = ifelse(t1 >= t0, paste0("lag_", t1-t0, sep=""), paste0("lead_", t0-t1, sep=""))
   
   if (estimand == "std") {
+    # Define different groups of observations 
     treat_set1 = data_study_augment %>% filter(year == t1 & treat_start_year == t0)
     control_set1 = data_study_augment %>% filter(year == t1 & treat_start_year == 9999) 
     invalid_set1 = data_study_augment %>% filter(year == t1 & !treat_start_year %in% c(t0, 9999))
@@ -733,59 +734,10 @@ GetInfluenceBalance = function(estimand, method, t0, t1) {
 
 ui <- fluidPage(
   
-  theme = shinythemes::shinytheme("sandstone"), 
-  
   # Application title
   titlePanel("Visualize Event Study Dataset"),
   
   navbarPage("Visualizations",
-             
-             tabPanel("Data",
-                      
-                      sidebarLayout(
-                        
-                        sidebarPanel(
-                          
-                          h4("Data"), 
-                          fileInput(inputId = "file", 
-                                    label = "Upload data from your event study:",
-                                    accept = ".csv"), 
-                          # for acceptable data structure to include: 
-                          # (1) time, unit indicators
-                          # (2) treatment indicators (binary)
-                          # Horizontal line 
-                          tags$hr(), 
-                          
-                          h4("Variable"), 
-                          textInput(inputId = "outcome_name", 
-                                    label = "What's the variable name of your outcome:", 
-                                    value = "asmrs"), 
-                          textInput(inputId = "treat_name", 
-                                    label = "What's the variable name of your binary treatment:", 
-                                    value = "treat_status"),
-                          textInput(inputId = "time_ind_name", 
-                                    label = "What's the variable name of your time indicator:", 
-                                    value = "year"),
-                          textInput(inputId = "unit_ind_name", 
-                                    label = "What's the variable name of your unit indicator:", 
-                                    value = "state"), 
-                          textInput(inputId = "covar_name", 
-                                    label = "What's the name(s) of your control covariates (seperated by comma, e.g. 'var1,var2,var3'): ", 
-                                    value = "pcinc,asmrh,cases")
-                        ), 
-                        
-                        mainPanel(
-                          navbarPage(
-                            title = "", 
-                            tabPanel("Visualize the data", 
-                                     plotlyOutput("panel_fig", height = "500px", width = "750px")), 
-                            tabPanel("Proportion of units under treatment each year", 
-                                     plotOutput("treat_prop_fig", height = "500px", width = "750px"))
-                            
-                          )
-                        )
-                      )
-             ), 
              
              tabPanel("Estimand and Assumptions",
                       
@@ -832,6 +784,23 @@ ui <- fluidPage(
                           ), 
                           checkboxInput("washout", 'Treatment Effect Dissipation.', FALSE), 
                           checkboxInput("highlight", 'Show observations with different colors.', FALSE)
+                          
+                          # conditionalPanel(
+                          #   condition = "input.estimand == 'new1'",
+                          # 
+                          #   # Horizontal line
+                          #   tags$hr(),
+                          # 
+                          #   h5("Strength of assumptions"),
+                          #   conditionalPanel(
+                          #     condition = "input.anticipation",
+                          #     checkboxInput("anticipation_strength", 'Show strength of limited treatment anticipation assumption.', FALSE)
+                          #   ),
+                          #   conditionalPanel(
+                          #     condition = "input.washout",
+                          #     checkboxInput("washout_strength", 'Show strength of treatment effect dissipation assumption.', FALSE)
+                          #   )
+                          # )
                         ),
                         mainPanel(plotOutput("panelview"))
                       )
@@ -947,6 +916,10 @@ ui <- fluidPage(
                             condition = "input.anticipate",
                             tableOutput("balance_anticipate_ess")
                           ), 
+                          #conditionalPanel(
+                          #  condition = "input.delay",
+                          #  tableOutput("balance_delay_ess")
+                          #), 
                           conditionalPanel(
                             condition = "input.dissipate",
                             tableOutput("balance_dissipate_ess")
@@ -996,7 +969,66 @@ ui <- fluidPage(
                           plotlyOutput("infuence_plot")
                         )
                       )
-             )
+             ), 
+             
+             # tabPanel("Estimation",
+             #          
+             #          sidebarLayout(
+             #              sidebarPanel(
+             #                  h4("Estimand"), 
+             #                  selectInput("estimand_3", "Choose the estimand:",
+             #                              c("ATE_{t0, >t0, t1}" = "new3",
+             #                                "ATE_{t0, inf, t1}" = "std3")), 
+             #                  withMathJax(),
+             #                  helpText('Estimand can be ATE\\(_{t_0, >t_0, t_1}\\), which is the average causal 
+             #        effect the target population observed at time \\(t_1\\) from adopting the treatment 
+             #        for the first time at time \\(t_0\\) to adopting the treatment sometime after time \\(t_0\\); '), 
+             #                  helpText('A special case of the estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
+             #        effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
+             #       time at time \\(t_0\\) to never adopting the treatment.'), 
+             #                  
+             #                  sliderInput("t0_3",
+             #                              "What is the t0 in the target estimand? ", 
+             #                              value = 1975, 
+             #                              min = 1964,
+             #                              max = 1996), 
+             #                  withMathJax(),
+             #                  helpText('\\(t_0\\) denotes the treatment initiation time.'),
+             #                  
+             #                  sliderInput("t1_3",
+             #                              "What is the t1 in the target estimand? ", 
+             #                              value = 1980, 
+             #                              min = 1964,
+             #                              max = 1996), 
+             #                  withMathJax(),
+             #                  helpText('\\(t_1\\) denotes the time of observation.'),
+             #                  
+             #                  # Horizontal line 
+             #                  tags$hr(), 
+             #                  h4("Assumptions"), 
+             #                  helpText('Consider scenarios when the following assumptions hold or not hold.'),
+             #                  
+             #                  checkboxInput("invariance_3", 'Time Shift Invariance. ', FALSE), 
+             #                  
+             #                  conditionalPanel(
+             #                      condition = "input.invariance_3",
+             #                      checkboxInput("anticipation_3", 'Limited Treatment Anticipation.', FALSE), 
+             #                      
+             #                      checkboxInput("washout_3", 'Treatment Effect Dissipation.', FALSE)
+             #                  ), 
+             #                  
+             #                  conditionalPanel(
+             #                      condition = "input.invariance_3",
+             #                      helpText('Represent groups of observation corresponding to the assumptions above.'),
+             #                      checkboxInput("highlight_3", 'Show observations with different colors.', FALSE)
+             #                  )
+             #              ),
+             #              mainPanel(
+             #                  plotOutput("estimatePlot"), 
+             #                  tableOutput("estimates"))
+             #          )
+             # )
+             
   )
 )
 
@@ -1007,94 +1039,12 @@ ui <- fluidPage(
 
 server = function(input, output){
   
-  input_data <- reactive({
-    infile <- input$file
-    if (is.null(infile)) {
-      return(NULL)
-    }
-    data = read.csv(infile$datapath, header = TRUE)
-    
-    outcome = data[, input$outcome_name]
-    treat = data[, input$treat_name]
-    time = data[, input$time_ind_name]
-    unit = data[, input$unit_ind_name]
-    idx = 1:nrow(data)
-    covar_names = str_split(input$covar_name, ",")[[1]]
-    covars_df = data[, covar_names]
-    col_names = paste("X", 1:ncol(covars_df), sep = "")
-    colnames(covars_df) = col_names
-    
-    df = data.frame(cbind(idx, unit, time, outcome, treat, covars_df))
-    colnames(df) = c("X", "Unit", "Time", "Outcome", "Treatment", col_names)
-    
-    df = df %>% 
-      mutate(Time = as.numeric(as.character(Time)), 
-             Treatment = factor(Treatment, level = c(1, 0))) %>% 
-      group_by(Unit) %>% 
-      # no non-missing arguments to min; returning Inf
-      mutate(TreatStartYear = min(Time[Treatment == 1])) %>% ungroup()
-    df
-  })
-  
-  
-  panel_data <- reactive({
-    panel_data = data.frame(
-      cbind(
-        rep(unique(input_data()$Unit), each = length(unique(input_data()$Time))), 
-        rep(unique(input_data()$Time), length(unique(input_data()$Unit)))
-      )
-    )
-    colnames(panel_data) = c("Unit", "Time")
-    
-    panel_data = panel_data %>% 
-      mutate(Time = as.numeric(Time), 
-             Unit = factor(Unit)) %>% 
-      left_join(., input_data(), by = c("Unit", "Time")) %>% 
-      dplyr::select(Unit, Time, Outcome, Treatment, TreatStartYear) %>% 
-      mutate(Unit = factor(Unit, level = unique(Unit[order(TreatStartYear, decreasing = T)]) )) 
-    panel_data
-  })
-  
-  output$panel_fig = renderPlotly({
-    panel_fig = ggplot(panel_data(), 
-                       aes(x = Time, y = Unit, label=Outcome, label2=TreatStartYear), position="identity")  +
-      geom_tile(color="gray80", fill="white", size=0.1, stat="identity") + 
-      geom_point(aes(x = Time, y = Unit, shape = Treatment)) + 
-      scale_shape_manual(values = c(19, 1)) + 
-      labs(x = "Time", y = "Unit", 
-           title = "", 
-           shape = "Treatment Status"
-      ) + panelview_plot_tyle
-    ggplotly(panel_fig, height = 500, width = 730) %>% 
-     plotly::layout(legend=list(xanchor='center', yanchor='bottom', y = -0.35, x = 0.5, orientation='h'))
-  })
-  
-  output$treat_prop_fig = renderPlot({
-    
-    treat_prop_fig = panel_data() %>% 
-      dplyr::group_by(Time) %>% 
-      summarise(Treat = mean(Treatment == "1"), 
-                Untreat = 1-Treat) %>% ungroup() %>% 
-      gather(.,
-             key = "TreatmentStatus",
-             value = "Proportion",
-             Treat, Untreat) %>% 
-      ggplot() + 
-      geom_bar(aes(x=Time, y=Proportion, fill=TreatmentStatus), position="fill", stat="identity") + 
-      scale_fill_manual(values = c("#9dc4e4", "#c6e0b4")) +
-      labs(x = "Time", 
-           y = "Proportion", 
-           title = "", 
-           fill = "Treatment Status"
-      ) + panelview_plot_tyle
-    treat_prop_fig
-  }, height = 500, width = 730)
-  
   output$panelview = renderPlot({
     
     # define the valid control lead lag range
     time_til_ubound <- input$t1_1-input$t0_1
     time_til_lbound <- input$t1_1-max(data_study$year)
+    
     # generate visualization of the panel data 
     panelview_data = data.frame(cbind(rep(unique(data_study$state), 
                                           each = length(unique(data_study$year))), 
