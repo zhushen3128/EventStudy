@@ -33,29 +33,35 @@ library(sf)
 library(leaflet)
 library(shinyTree)
 
+source("plot_func.R")
+source("util.R")
+
 #######################################################################
 ##    Global 
 #######################################################################
 
-obs_colors <- c(treat = "#9dc4e4", control = "#c6e0b4", 
-                Dissipate ="#f7a59b", LimitAnticipate = "#ffc001", invalid = "white")
+obs_colors <- c(Treat = "#9dc4e4", 
+                Control = "#c6e0b4", 
+                LimitAnticipate = "#ffc001", 
+                Dissipate ="#f56c5b", 
+                Invalid = "white")
 
 obs_usual_colors <- c(Treat = "#9dc4e4", 
-                      Never = "#c6e0b4", 
+                      Control = "#c6e0b4", 
                       LimitAnticipate = "#ffc001", 
                       DelayOnset = "#D2691E", 
-                      Dissipate ="#f7a59b", 
+                      Dissipate ="#f56c5b", 
                       Invalid = "white")
 
 ess_obs_colors <- c(IdealTreat = "#3293e3", 
                     IdealControl = "#69b334", 
                     InvTreat = "#c5dbed", 
                     InvControl = "#ddedd1", 
-                    DelayOnset = "#D2691E", 
                     LimitAnticipate = "#ffc001", 
+                    DelayOnset = "#D2691E", 
                     Dissipate = "#f56c5b",
-                    treat_of_invalid = "#e1e1e1", 
-                    control_of_invalid = "#fafafa")
+                    InvalidTreat = "#e1e1e1", 
+                    InvalidControl = "#fafafa")
 
 panelview_plot_tyle <- 
   theme_bw() + 
@@ -64,40 +70,20 @@ panelview_plot_tyle <-
         panel.border = element_rect(fill=NA,color="white", size=0.5, linetype="solid"),
         axis.line = element_blank(),
         axis.ticks = element_blank(),
-        axis.title=element_text(size=12),
-        axis.title.x = element_text(margin = margin(t = 8, r = 0, b = 0, l = 0)),
-        axis.title.y = element_text(margin = margin(t = 0, r = 8, b = 0, l = 0)),
-        axis.text = element_text(color="black", size=8),
-        axis.text.x = element_text(size = 8, angle = 0, hjust=0.5, vjust=0),
-        axis.text.y = element_text(size = 8),
+        axis.title=element_text(size=10),
+        axis.title.x = element_text(size = 12, margin = margin(t = 8, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size = 12, margin = margin(t = 0, r = 8, b = 0, l = 0)),
+        axis.text = element_text(color="black", face="bold", size=12),
+        axis.text.x = element_text(face="bold", size = 10, angle = 0, hjust=0.5, vjust=0),
+        axis.text.y = element_text(face="bold", size = 10),
         plot.background = element_rect(fill = "white"),
         legend.background = element_rect(fill = "white"),
         legend.position = "bottom",
         legend.margin = margin(c(0, 5, 5, 0)),
         legend.text = element_text(margin = margin(r = 10, unit = "pt"), size = 10),
-        plot.title = element_text(size=15, hjust = 0.5, face="bold",
-                                  margin = margin(8, 0, 8, 0)))
-
-implied_plot_tyle <- 
-  theme(plot.title = element_text(family = "Times", size = rel(2), hjust = 0.5),
-        text = element_text(family = "Times"),
-        panel.background = element_rect(colour = NA),
-        plot.background = element_rect(colour = "white"),
-        axis.title = element_blank(),
-        axis.title.y = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text = element_blank(),
-        axis.line = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        legend.key = element_rect(colour = NA),
-        legend.position = "bottom",
-        legend.margin = unit(0, "cm"),
-        plot.margin=unit(c(1,0,0,0),unit = "mm"),
-        strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-        strip.text = element_text(face="bold", family = "Times"))
-
+        plot.title = element_text(size=15, hjust = 0.5, face="bold", margin = margin(8, 0, 8, 0)))
+guides(fill = guide_legend(order = 1), 
+       shape = guide_legend(order = 2))
 
 #######################################################################
 ##    Data
@@ -162,571 +148,6 @@ lead_lag_covariates <- c(
   "lag_inf"
 )
 
-
-#######################################################################
-##    Helper functions 
-#######################################################################
-
-ESS <- function(w) {
-  num <- sum(abs(w))^2
-  den <- sum(w^2)
-  ess <- num/den
-  return(ess)
-}
-
-PlotESS = function(estimand, t0, t1) {
-  target_name = ifelse(t1 >= t0, paste0("lag_", t1-t0, sep=""), paste0("lead_", t0-t1, sep=""))
-  
-  if (estimand == "std") {
-    treat_set1 = data_study_augment %>% filter(year == t1 & treat_start_year == t0)
-    control_set1 = data_study_augment %>% filter(year == t1 & treat_start_year == 9999) 
-    invalid_set1 = data_study_augment %>% filter(year == t1 & !treat_start_year %in% c(t0, 9999))
-    
-    treat_set2 = data_study_augment %>% filter(time_til == t1-t0) 
-    control_set2 = data_study_augment %>% filter(treat_start_year == 9999) 
-    invalid_set2 = data_study_augment %>% filter(time_til != t1-t0 & treat_start_year != 9999) 
-    
-    treat_ideal_idx = treat_set1$X
-    control_ideal_idx = control_set1$X
-    treat_inv_idx = setdiff(treat_set2$X, treat_set1$X)
-    control_inv_idx = setdiff(control_set2$X, control_set1$X)
-    
-    prior_treat_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 1 & time_til < t1-t0)
-    
-    prior_control_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 0 & time_til < t1-t0)
-    
-    post_treat_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 1 & time_til > t1-t0)
-    
-    post_control_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 0 & time_til > t1-t0)
-    
-    treat_invalid_set3 = data_study_augment %>% 
-      filter(!state %in% c(treat_set2$state, control_set2$state)) %>% 
-      filter(treat_status == 1)
-    
-    control_invalid_set3 = data_study_augment %>% 
-      filter(!state %in% c(treat_set2$state, control_set2$state)) %>% 
-      filter(treat_status == 0)
-    
-    # Create one column indicating the group for each observation 
-    data_study_augment = data_study_augment %>% 
-      mutate(group_ind = case_when(X %in% treat_ideal_idx ~ "IdealTreat",
-                                   X %in% control_ideal_idx ~ "IdealControl",
-                                   X %in% treat_inv_idx ~ "InvTreat", 
-                                   X %in% control_inv_idx ~ "InvControl", 
-                                   X %in% prior_treat_treat_set3$X ~ "DelayOnset",
-                                   X %in% prior_control_treat_set3$X ~ "LimitAnticipate",
-                                   X %in% post_treat_treat_set3$X ~ "Dissipate", 
-                                   X %in% post_control_treat_set3$X ~ "post_control_of_treat", 
-                                   X %in% treat_invalid_set3$X ~ "treat_of_invalid", 
-                                   X %in% control_invalid_set3$X ~ "control_of_invalid")) %>% 
-      mutate(group_ind = factor(group_ind, levels = c("IdealTreat", "IdealControl", 
-                                                      "InvTreat", "InvControl",
-                                                      "LimitAnticipate", "DelayOnset", 
-                                                      "Dissipate", "post_control_of_treat", 
-                                                      "treat_of_invalid", "control_of_invalid")))
-    
-    panelview_data = data.frame(cbind(rep(unique(data_study$state), 
-                                          each = length(unique(data_study$year))), 
-                                      rep(unique(data_study$year), 
-                                          length(unique(data_study$state)))))
-    colnames(panelview_data) = c("state", "year")
-    
-    panelview_data = panelview_data %>% 
-      mutate(year = as.numeric(year)) %>% 
-      left_join(., data_study_augment, by = c("state", "year")) %>% 
-      dplyr::select(state, year, treat_status, time_til, treat_start_year, group_ind) %>% 
-      mutate(
-        state = factor(state, level = unique(state[order(treat_start_year, decreasing = T)]) ), 
-        year = factor(year, level = min(year):max(year)), 
-        treat_status = factor(treat_status, level = c(1, 0)))
-    
-    p <- ggplot(panelview_data, aes(x = year, y = state), position = "identity")  +
-      geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") + 
-      geom_point(aes(x = year, y = state, shape = treat_status)) + 
-      scale_fill_manual(values = ess_obs_colors) + 
-      scale_shape_manual(values = c(19, 1)) + 
-      labs(x = "Year", y = "State", title = "", 
-           fill = "Observation Group", 
-           shape = "Treatment Status") + panelview_plot_tyle
-    p
-  }
-}
-
-GetESS = function(estimand, t0, t1, method = c("twfe", "experiment", "invariance", "anticipate", "delay", "dissipate")) {
-  
-  target_name = ifelse(t1 >= t0, paste0("lag_", t1-t0, sep=""), paste0("lead_", t0-t1, sep=""))
-  # Now compute the Balancing weights 
-  bal = list()
-  bal$bal_cov = baseline_covariates
-  ### Set tolerances
-  bal$bal_std = "group"
-  # Use adaptive algorithm 
-  bal$bal_alg = TRUE
-  bal$bal_gri = c(0.0001, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1)
-  
-  if (estimand == "std") {
-    # Define different groups of observations 
-    treat_set1 = data_study_augment %>% filter(year == t1 & treat_start_year == t0)
-    control_set1 = data_study_augment %>% filter(year == t1 & treat_start_year == 9999) 
-    invalid_set1 = data_study_augment %>% filter(year == t1 & !treat_start_year %in% c(t0, 9999))
-    
-    treat_set2 = data_study_augment %>% filter(time_til == t1-t0) 
-    control_set2 = data_study_augment %>% filter(treat_start_year == 9999) 
-    invalid_set2 = data_study_augment %>% filter(time_til != t1-t0 & treat_start_year != 9999) 
-    
-    treat_ideal_idx = treat_set1$X
-    control_ideal_idx = control_set1$X
-    treat_inv_idx = setdiff(treat_set2$X, treat_set1$X)
-    control_inv_idx = setdiff(control_set2$X, control_set1$X)
-    
-    prior_treat_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 1 & time_til < t1-t0)
-    
-    prior_control_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 0 & time_til < t1-t0)
-    
-    post_treat_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 1 & time_til > t1-t0)
-    
-    post_control_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 0 & time_til > t1-t0)
-    
-    treat_invalid_set3 = data_study_augment %>% 
-      filter(!state %in% c(treat_set2$state, control_set2$state)) %>% 
-      filter(treat_status == 1)
-    
-    control_invalid_set3 = data_study_augment %>% 
-      filter(!state %in% c(treat_set2$state, control_set2$state)) %>% 
-      filter(treat_status == 0)
-    
-    # Create one column indicating the group for each observation 
-    data_study_augment = data_study_augment %>% 
-      mutate(group_ind = case_when(X %in% treat_ideal_idx ~ "IdealTreat",
-                                   X %in% control_ideal_idx ~ "IdealControl",
-                                   X %in% treat_inv_idx ~ "InvTreat", 
-                                   X %in% control_inv_idx ~ "InvControl", 
-                                   X %in% prior_treat_treat_set3$X ~ "DelayOnset",
-                                   X %in% prior_control_treat_set3$X ~ "LimitAnticipate",
-                                   X %in% post_treat_treat_set3$X ~ "Dissipate", 
-                                   X %in% post_control_treat_set3$X ~ "post_control_of_treat", 
-                                   X %in% treat_invalid_set3$X ~ "treat_of_invalid", 
-                                   X %in% control_invalid_set3$X ~ "control_of_invalid")) %>% 
-      mutate(group_ind = factor(group_ind, levels = c("IdealTreat", "IdealControl", 
-                                                      "InvTreat", "InvControl",
-                                                      "LimitAnticipate", "DelayOnset", 
-                                                      "Dissipate", "post_control_of_treat", 
-                                                      "treat_of_invalid", "control_of_invalid")))
-    if(method == "twfe") {
-      # Now compute the TWFE weights 
-      ## Define the formula 
-      event_study_formula2 <- as.formula(
-        paste("asmrs ~ ",
-              paste(state_covariates,collapse = " + "), " + ",
-              paste(year_covariates,collapse = " + "), " + ",
-              paste(lead_lag_covariates[-length(lead_lag_covariates)],collapse = " + ")
-        )
-      )
-      
-      ## TWFE regression uses all observations 
-      lmw_att_out2_original = lmw::lmw(event_study_formula2, 
-                                       data = data_study_augment, 
-                                       estimand = "ATT", method = "URI", 
-                                       treat = target_name)
-      weight_original = lmw_att_out2_original$weights
-      act_index = which(data_study_augment$time_til==t1-t0)
-      non_index = which(data_study_augment$time_til!=t1-t0)
-      data_study_augment = data_study_augment %>% 
-        # 2024/02/15: adapt to the changes of the lmw package
-        mutate(lmw_weight = ifelse(X %in% act_index, weight_original/length(act_index), weight_original/length(non_index)))
-      
-    } else if (method == "experiment") {
-      ## Setting 1: ideal experiment
-      df = data_study_augment %>% 
-        filter(year == t1) %>% 
-        filter(treat_start_year %in% c(t0, 9999)) %>% 
-        mutate(treat_ind = ifelse(treat_start_year == t0, 1, 0)) %>% 
-        dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs) %>% as.data.frame()
-      names(df) = c("X", "t", baseline_covariates, "Y")
-      # Solve for the Average Treatment Effect on the Treated, ATT (default)
-      sbwatt_object_1 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-      if (!is.null(sbwatt_object_1)) {
-        sbwatt_weight_set1 = sbwatt_object_1$dat_weights %>% dplyr::select(X, sbw_weights) 
-        data_study_augment = data_study_augment %>% left_join(sbwatt_weight_set1, by = "X")
-        data_study_augment$sbw_weights = base::replace(data_study_augment$sbw_weights, is.na(data_study_augment$sbw_weights), 0)
-      } 
-    } else if (method == "invariance") {
-      ## Setting 2: ideal experiment + invariance to time shifts 
-      df = data_study_augment %>% 
-        filter(time_til == t1-t0 | treat_start_year == 9999) %>% 
-        mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
-        mutate(treat_ind = factor(treat_ind)) %>% 
-        dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs) %>% as.data.frame()
-      names(df) = c("X", "t", baseline_covariates, "Y")
-      # Solve for the Average Treatment Effect on the Treated, ATT (default)
-      sbwatt_object_2 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-      if (!is.null(sbwatt_object_2)) {
-        sbwatt_weight_set2 = sbwatt_object_2$dat_weights %>% dplyr::select(X, sbw_weights)  
-        data_study_augment = data_study_augment %>% left_join(sbwatt_weight_set2, by = "X")
-        data_study_augment$sbw_weights = base::replace(data_study_augment$sbw_weights, is.na(data_study_augment$sbw_weights), 0)
-      } 
-    } else if (method == "anticipate") {
-      ## Setting 3: after invoking the limited anticipation assumption 
-      df = data_study_augment %>% 
-        filter(group_ind %in% c("IdealTreat", "IdealControl", "InvTreat", "InvControl", "LimitAnticipate")) %>% 
-        mutate(treat_ind = ifelse(group_ind %in% c("IdealTreat", "InvTreat"), 1, 0)) %>% 
-        dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs) %>% as.data.frame()
-      names(df) = c("X", "t", baseline_covariates, "Y")
-      sbwatt_object_3 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-      
-      if (!is.null(sbwatt_object_3)) {
-        sbwatt_weight_set3 = sbwatt_object_3$dat_weights %>% 
-          dplyr::select(X, sbw_weights)
-        data_study_augment = data_study_augment %>% 
-          left_join(sbwatt_weight_set3, by = "X")
-        data_study_augment$sbw_weights = base::replace(data_study_augment$sbw_weights, is.na(data_study_augment$sbw_weights), 0)
-      } 
-    } else if (method == "delay") {
-      ## Setting 4: after invoking the delayed treatment onset assumption 
-      df = data_study_augment %>% 
-        filter(group_ind != "Dissipate") %>% 
-        mutate(treat_ind = ifelse(group_ind %in% c("IdealTreat", "InvTreat"), 1, 0)) %>% 
-        dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs) %>% as.data.frame()
-      names(df) = c("X", "t", baseline_covariates, "Y")
-      sbwatt_object_4 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-      if (!is.null(sbwatt_object_4)) {
-        sbwatt_weight_set4 = sbwatt_object_4$dat_weights %>% 
-          dplyr::select(X, sbw_weights)
-        data_study_augment = data_study_augment %>% 
-          left_join(sbwatt_weight_set4, by = "X")
-        data_study_augment$sbw_weights = base::replace(data_study_augment$sbw_weights, is.na(data_study_augment$sbw_weights), 0)
-      } 
-    } else if (method == "dissipate") {
-      ## Setting 5: after invoking the treatment effect dissipation assumption 
-      df = data_study_augment %>% 
-        mutate(treat_ind = ifelse(group_ind %in% c("IdealTreat", "InvTreat"), 1, 0)) %>% 
-        dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs) %>% as.data.frame()
-      names(df) = c("X", "t", baseline_covariates, "Y")
-      sbwatt_object_5 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-      
-      if (!is.null(sbwatt_object_5)) {
-        sbwatt_weight_set5 = sbwatt_object_5$dat_weights %>% dplyr::select(X, sbw_weights)
-        data_study_augment = data_study_augment %>% left_join(sbwatt_weight_set5, by = "X")
-        data_study_augment$sbw_weights = base::replace(data_study_augment$sbw_weights, is.na(data_study_augment$sbw_weights), 0)
-      } 
-    }
-    
-    if (method == "twfe") {
-      data_study_augment_ess = data_study_augment %>% 
-        group_by(group_ind) %>% 
-        summarise(
-          ss = n(), 
-          ess = ESS(lmw_weight),
-          ratio_ess_to_ss = ess / ss) %>% ungroup() %>% 
-        mutate(percent_of_each = ess / sum(ess, na.rm = T))
-      data_study_augment_ess =  rbind(data_study_augment_ess, 
-                                      data.frame(group_ind='total', t(colSums(data_study_augment_ess[, -1]))))
-      data_study_augment_ess[nrow(data_study_augment_ess), "ess"] = NA
-      
-      rownames(data_study_augment_ess) = NULL 
-      colnames(data_study_augment_ess) = c("Group of Observation", 
-                                           "Actual Sample Size (N)", 
-                                           "Effective Sample Size (ESS)", 
-                                           "ESS/N", 
-                                           "Proportion of Information Borrowing")
-      data_study_augment_ess
-    } else {
-      if (!is.null(data_study_augment$sbw_weights)) {
-        data_study_augment_ess = data_study_augment %>% 
-          group_by(group_ind) %>% 
-          summarise(
-            ss = n(), 
-            ess = ESS(sbw_weights),
-            ratio_ess_to_ss = ess / ss) %>% ungroup() %>% 
-          mutate(percent_of_each = ess / sum(ess, na.rm = T))
-        data_study_augment_ess =  rbind(data_study_augment_ess, 
-                                        data.frame(group_ind='total', t(colSums(data_study_augment_ess[, -1], na.rm = T))))
-        data_study_augment_ess[nrow(data_study_augment_ess), "ess"] = NA
-        
-        rownames(data_study_augment_ess) = NULL 
-        colnames(data_study_augment_ess) = c("Group of Observation", 
-                                             "Actual Sample Size (N)", 
-                                             "Effective Sample Size (ESS)", 
-                                             "ESS/N", 
-                                             "Proportion of Information Borrowing")
-        data_study_augment_ess
-      }
-    }
-  }
-}
-
-PlotInfluence = function(inf_all, estimand, t0, t1, metric) {
-  
-  target_name = ifelse(t1 >= t0, paste0("lag_", t1-t0, sep=""), paste0("lead_", t0-t1, sep=""))
-  if (estimand == "std") {
-    # Define different groups of observations 
-    treat_set1 = data_study_augment %>% filter(year == t1 & treat_start_year == t0)
-    control_set1 = data_study_augment %>% filter(year == t1 & treat_start_year == 9999) 
-    invalid_set1 = data_study_augment %>% filter(year == t1 & !treat_start_year %in% c(t0, 9999))
-    
-    treat_set2 = data_study_augment %>% filter(time_til == t1-t0) 
-    control_set2 = data_study_augment %>% filter(treat_start_year == 9999) 
-    invalid_set2 = data_study_augment %>% filter(time_til != t1-t0 & treat_start_year != 9999) 
-    
-    treat_ideal_idx = treat_set1$X
-    control_ideal_idx = control_set1$X
-    treat_inv_idx = setdiff(treat_set2$X, treat_set1$X)
-    control_inv_idx = setdiff(control_set2$X, control_set1$X)
-    
-    prior_treat_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 1 & time_til < t1-t0)
-    
-    prior_control_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 0 & time_til < t1-t0)
-    
-    post_treat_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 1 & time_til > t1-t0)
-    
-    post_control_treat_set3 = data_study_augment %>% 
-      filter(state %in% treat_set2$state) %>% 
-      filter(treat_status == 0 & time_til > t1-t0)
-    
-    treat_invalid_set3 = data_study_augment %>% 
-      filter(!state %in% c(treat_set2$state, control_set2$state)) %>% 
-      filter(treat_status == 1)
-    
-    control_invalid_set3 = data_study_augment %>% 
-      filter(!state %in% c(treat_set2$state, control_set2$state)) %>% 
-      filter(treat_status == 0)
-    
-    # Create one column indicating the group for each observation 
-    data_study_augment = data_study_augment %>% 
-      mutate(group_ind = case_when(X %in% treat_ideal_idx ~ "IdealTreat",
-                                   X %in% control_ideal_idx ~ "IdealControl",
-                                   X %in% treat_inv_idx ~ "InvTreat", 
-                                   X %in% control_inv_idx ~ "InvControl", 
-                                   X %in% prior_treat_treat_set3$X ~ "DelayOnset",
-                                   X %in% prior_control_treat_set3$X ~ "LimitAnticipate",
-                                   X %in% post_treat_treat_set3$X ~ "Dissipate", 
-                                   X %in% post_control_treat_set3$X ~ "post_control_of_treat", 
-                                   X %in% treat_invalid_set3$X ~ "treat_of_invalid", 
-                                   X %in% control_invalid_set3$X ~ "control_of_invalid")) %>% 
-      mutate(group_ind = factor(group_ind, levels = c("IdealTreat", "IdealControl", 
-                                                      "InvTreat", "InvControl",
-                                                      "LimitAnticipate", "DelayOnset", 
-                                                      "Dissipate", "post_control_of_treat", 
-                                                      "treat_of_invalid", "control_of_invalid")))
-    
-    if (metric == "sic") {
-      show.r <- sort(order(abs(inf_all$inf), decreasing = TRUE)[1:10])
-    } else if (metric == "sic_scaled") {
-      show.r <- sort(order(abs(inf_all$inf_scaled), decreasing = TRUE)[1:10])
-    } else if (metric == "est_change") {
-      show.r <- sort(order(abs(inf_all$est_change), decreasing = TRUE)[1:10])
-    }
-    labels1 <- rep("",nrow(data_study_augment))
-    labels1[show.r] <- as.character(show.r)
-    
-    plot_data = data_study_augment %>% 
-      mutate(sic = inf_all$inf, 
-             sic_scaled = inf_all$inf_scaled, 
-             est_change = inf_all$est_change) %>% 
-      dplyr::rename(female_suicide = asmrs) %>% 
-      dplyr::select(X, state, year, female_suicide, treat_start_year, 
-                    group_ind, sic, sic_scaled, est_change)
-    
-    if (metric == "sic") {
-      plt = ggplot(plot_data, aes(x = X, xend = X, y = 0, yend = sic, 
-                                  state = state, year = year, treat_start_year = treat_start_year, 
-                                  female_suicide = female_suicide, 
-                                  group = group_ind, color = group_ind)) +
-        geom_segment(linetype = "solid", linewidth = 0.3) + 
-        labs(x = "Observation Index", y = "SIC", color = "Observation Group") +
-        geom_text(aes(x = X, y = sic, label = labels1), size = 3, vjust = -1) +
-        scale_color_manual(values = ess_obs_colors) +
-        theme_bw()
-      plt
-      
-    } else if (metric == "sic_scaled") {
-      plt = ggplot(plot_data, aes(x = X, xend = X, y = 0, yend = sic_scaled, 
-                                  state = state, year = year, treat_start_year = treat_start_year, 
-                                  female_suicide = female_suicide, 
-                                  group = group_ind, color = group_ind)) +
-        geom_segment(linetype = "solid", linewidth = 0.3) + 
-        labs(x = "Observation Index", y = "SIC Scaled", color = "Observation Group") +
-        geom_text(aes(x = X, y = sic_scaled, label = labels1), size = 3, vjust = -1) +
-        scale_color_manual(values = ess_obs_colors) +
-        theme_bw()
-      plt
-      
-    } else {
-      plt = ggplot(plot_data, aes(x = X, xend = X, y = 0, yend = est_change, 
-                                  state = state, year = year, treat_start_year = treat_start_year, 
-                                  female_suicide = female_suicide, 
-                                  group = group_ind, color = group_ind)) +
-        geom_segment(linetype = "solid", linewidth = 0.3) + 
-        labs(x = "Observation Index", y = "Change in Point Estimate", color = "Observation Group") +
-        geom_text(aes(x = X, y = est_change, label = labels1), size = 3, vjust = -1) +
-        scale_color_manual(values = ess_obs_colors) +
-        theme_bw()
-      plt
-    }
-  }
-}
-
-GetInfluence = function(estimand, t0, t1) {
-  target_name = ifelse(t1 >= t0, paste0("lag_", t1-t0, sep=""), paste0("lead_", t0-t1, sep=""))
-  event_study_formula2 = as.formula(
-    paste("asmrs ~ ",
-          paste(state_covariates,collapse = " + "), " + ",
-          paste(year_covariates,collapse = " + "), " + ",
-          paste(lead_lag_covariates[-length(lead_lag_covariates)],collapse = " + ")
-    )
-  )
-  
-  if (estimand == "std") {
-    lmw_att_out2_original = lmw::lmw(event_study_formula2, 
-                                     data = data_study_augment, 
-                                     estimand = "ATT", method = "URI", 
-                                     treat = target_name)
-    weight_original = lmw_att_out2_original$weights
-    act_index = which(data_study_augment$time_til==t1-t0)
-    non_index = which(data_study_augment$time_til!=t1-t0)
-    w_act = weight_original[act_index] / length(act_index)
-    w_non = weight_original[non_index] / length(non_index)
-    y_act = data_study_augment$asmrs[act_index]
-    y_non = data_study_augment$asmrs[non_index]
-    T_F = sum(y_act*w_act) - sum(y_non*w_non)
-    
-    ComputeInfluence_i = function(idx, t0, t1, data, target_name, formula, estimand = "ATT", method = "URI") {
-      data_noi = data %>% filter(X != idx) 
-      act_index_noi = data_noi$X[which(data_noi$time_til==t1-t0)]
-      non_index_noi = data_noi$X[which(data_noi$time_til!=t1-t0)]
-      
-      lmw_att_out2_noi = lmw::lmw(formula, data = data_noi, estimand, method, treat = target_name)
-      w_noi_act = lmw_att_out2_noi$weights[which(data_noi$X %in% act_index_noi)] / length(act_index_noi)
-      w_noi_non = lmw_att_out2_noi$weights[which(data_noi$X %in% non_index_noi)] / length(non_index_noi)
-      y_noi_act = data_noi$asmrs[which(data_noi$X %in% act_index_noi)]
-      y_noi_non = data_noi$asmrs[which(data_noi$X %in% non_index_noi)]
-      T_F_noi = sum(y_noi_act*w_noi_act) - sum(y_noi_non*w_noi_non)
-      inf_i = nrow(data_noi)*(T_F_noi-T_F)
-      est_change_i = T_F_noi-T_F
-      return(c(inf_i, est_change_i))
-    }
-    
-    inf_all = parallel::mcmapply(ComputeInfluence_i, data_study_augment$X,  
-                                 MoreArgs = list(t0 = t0, t1 = t1, 
-                                                 data = data_study_augment, 
-                                                 target_name = target_name, formula = event_study_formula2), 
-                                 mc.cores = 5)
-    inf_all = data.frame(t(inf_all))
-    colnames(inf_all) = c("inf", "est_change")
-    inf_all$inf_scaled = abs(inf_all$inf)/max(abs(inf_all$inf))
-  }
-  return(inf_all)
-}
-
-# to do, include balance method SIC values as well 
-GetInfluenceBalance = function(estimand, method, t0, t1) {
-  
-  # compute the Balancing weights 
-  ### Define moment covariates
-  bal = list()
-  bal$bal_cov = baseline_covariates
-  ### Set tolerances
-  bal$bal_std = "group"
-  # Use adaptive algorithm 
-  bal$bal_alg = TRUE
-  bal$bal_gri = c(0.0001, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1)
-  
-  ## Setting 2: ideal experiment + invariance to time shifts 
-  data_study_augment_subset = data_study_augment %>% 
-    filter(time_til == t1-t0 | treat_start_year == 9999) %>% 
-    mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
-    dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs)
-  df = as.data.frame(cbind(data_study_augment_subset$X, 
-                           data_study_augment_subset$treat_ind, 
-                           data_study_augment_subset[, baseline_covariates], 
-                           data_study_augment_subset$asmrs))
-  names(df) = c("X", "t", baseline_covariates, "Y")
-  # Solve for the Average Treatment Effect on the Treated, ATT (default)
-  sbwatt_object_2 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-  if (!is.null(sbwatt_object_2)) {
-    sbwatt_weight_set2 = sbwatt_object_2$dat_weights %>% dplyr::select(X, sbw_weights)  
-    data_study_augment = data_study_augment %>% left_join(sbwatt_weight_set2, by = "X")
-    data_study_augment$sbw_weights = replace(data_study_augment$sbw_weights, 
-                                             is.na(data_study_augment$sbw_weights), 0)
-  } 
-  weight_original = data_study_augment$sbw_weights
-  act_index = which(data_study_augment$time_til==t1-t0)
-  non_index = which(data_study_augment$time_til!=t1-t0)
-  w_act = weight_original[act_index]
-  w_non = weight_original[non_index]
-  y_act = data_study_augment$asmrs[act_index]
-  y_non = data_study_augment$asmrs[non_index]
-  T_F = sum(y_act*w_act) - sum(y_non*w_non)
-  
-  ComputeInfluence_i = function(idx, t0, t1, data) {
-    data_noi = data %>% filter(X != idx) 
-    act_index_noi = data_noi$X[which(data_noi$time_til==t1-t0)]
-    non_index_noi = data_noi$X[which(data_noi$time_til!=t1-t0)]
-    
-    data_subset = data %>% 
-      filter(time_til == t1-t0 | treat_start_year == 9999) %>% 
-      mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
-      dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs)
-    df = as.data.frame(cbind(data_subset$X, data_subset$treat_ind, 
-                             data_subset[, baseline_covariates], data_subset$asmrs))
-    names(df) = c("X", "t", baseline_covariates, "Y")
-    
-    # Solve for the Average Treatment Effect on the Treated, ATT (default)
-    sbwatt_object = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-    if (!is.null(sbwatt_object)) {
-      sbwatt_weight_set = sbwatt_object$dat_weights %>% dplyr::select(X, sbw_weights)  
-      data = data %>% left_join(sbwatt_weight_set, by = "X")
-      data$sbw_weights = replace(data$sbw_weights, is.na(data$sbw_weights), 0)
-      
-      w_noi_act = data$sbw_weights[which(data_noi$X %in% act_index_noi)]
-      w_noi_non = data$sbw_weights[which(data_noi$X %in% non_index_noi)]
-      y_noi_act = data_noi$asmrs[which(data_noi$X %in% act_index_noi)]
-      y_noi_non = data_noi$asmrs[which(data_noi$X %in% non_index_noi)]
-      T_F_noi = sum(y_noi_act*w_noi_act) - sum(y_noi_non*w_noi_non)
-      inf_i = nrow(data_noi)*(T_F_noi-T_F)
-      est_change_i = T_F_noi-T_F
-      
-    } else {
-      inf_i = est_change_i = NULL
-    }
-    
-    return(c(inf_i, est_change_i))
-  }
-  
-  balance_units = data_study_augment_subset$X
-  inf_all = parallel::mcmapply(ComputeInfluence_i, balance_units,  
-                               MoreArgs = list(t0 = t0, t1 = t1, 
-                                               data = data_study_augment), 
-                               mc.cores = 5)
-  inf_all = data.frame(t(inf_all))
-  colnames(inf_all) = c("inf", "est_change")
-  inf_all$inf_scaled = abs(inf_all$inf)/max(abs(inf_all$inf))
-  return(inf_all)
-}
-
-
 #######################################################################
 ##    UI
 #######################################################################
@@ -750,10 +171,6 @@ ui <- fluidPage(
                           fileInput(inputId = "file", 
                                     label = "Upload data from your event study:",
                                     accept = ".csv"), 
-                          # for acceptable data structure to include: 
-                          # (1) time, unit indicators
-                          # (2) treatment indicators (binary)
-                          # Horizontal line 
                           tags$hr(), 
                           
                           h4("Variable"), 
@@ -778,9 +195,9 @@ ui <- fluidPage(
                           navbarPage(
                             title = "", 
                             tabPanel("Visualize the data", 
-                                     plotlyOutput("panel_fig", height = "500px", width = "750px")), 
+                                     plotlyOutput("panel_fig", height = "600px", width = "900px")), 
                             tabPanel("Proportion of units under treatment each year", 
-                                     plotOutput("treat_prop_fig", height = "500px", width = "750px"))
+                                     plotOutput("treat_prop_fig", height = "600px", width = "900px"))
                             
                           )
                         )
@@ -790,34 +207,28 @@ ui <- fluidPage(
              tabPanel("Estimand and Assumptions",
                       
                       sidebarLayout(
+                        
                         sidebarPanel(
+                          
                           h4("Estimand"), 
-                          selectInput("estimand", "Choose the estimand:",
-                                      c("ATE_{t0, >t0, t1}" = "new1",
-                                        "ATE_{t0, inf, t1}" = "std1")), 
+                          radioButtons("estimand", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, >t_0, t_1}\\)" = "new1",
+                                         "ATE\\(_{t_0, \\infty, t_1}\\)" = "std1")),
                           withMathJax(),
                           helpText('Estimand can be ATE\\(_{t_0, >t_0, t_1}\\), which is the average causal 
                       effect the target population observed at time \\(t_1\\) from adopting the treatment 
-                      for the first time at time \\(t_0\\) to adopting the treatment sometime after time \\(t_0\\); '), 
+                      for the first time at time \\(t_0\\) to adopting the treatment sometime after time \\(t_0\\).'), 
                           helpText('A special case of the estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
                       effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
                      time at time \\(t_0\\) to never adopting the treatment.'), 
                           
-                          sliderInput("t0_1",
-                                      "What is the t0 in the target estimand? ", 
-                                      value = 1975, 
-                                      min = 1964,
-                                      max = 1996), 
+                          numericInput("t0_1", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
                           withMathJax(),
                           helpText('\\(t_0\\) denotes the treatment initiation time.'),
                           
-                          sliderInput("t1_1",
-                                      "What is the t1 in the target estimand? ", 
-                                      value = 1980, 
-                                      min = 1964,
-                                      max = 1996), 
+                          numericInput("t1_1", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
                           withMathJax(),
-                          helpText('\\(t_1\\) denotes the time of observation.'),
+                          helpText('\\(t_1\\) denotes the treatment initiation time.'),
                           
                           # Horizontal line 
                           tags$hr(), 
@@ -833,62 +244,89 @@ ui <- fluidPage(
                           checkboxInput("washout", 'Treatment Effect Dissipation.', FALSE), 
                           checkboxInput("highlight", 'Show observations with different colors.', FALSE)
                         ),
-                        mainPanel(plotOutput("panelview"))
+                        mainPanel(plotOutput("panelview", height = "600px", width = "900px"))
                       )
              ), 
+             
+             
+             tabPanel("Two-way Fixed Effect Regression",
+                      sidebarLayout(
+                        sidebarPanel(
+                          h4("Estimand"), 
+                          radioButtons("estimand", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std6")),
+                          withMathJax(),
+                          helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
+                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
+                     time at time \\(t_0\\) to never adopting the treatment.'), 
+                          
+                          numericInput("t0_6", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
+                          withMathJax(),
+                          helpText('\\(t_0\\) denotes the treatment initiation time.'),
+                          
+                          numericInput("t1_6", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
+                          withMathJax(),
+                          helpText('\\(t_1\\) denotes the treatment initiation time.'), 
+                          
+                          # Horizontal line 
+                          tags$hr(), 
+                          h4("Regression"), 
+                          h5("If to fit the dynamic TWFE model with the following form, please specify the minimum and maximum relative treatment periods \\(a\\) and \\(b\\)."), 
+                          h5("\\(Y_{it} = \\alpha_i + \\beta_t + \\sum_{l = a}^{b} \\tau_l \\mathbf{1}_{l = t_i - F_i}\\)."), 
+                          h5("\\(a\\) and \\(b\\) in the dynamic specification define the treatment horizon."), 
+                          h5("Specifically, we allow anticipation effects due to the treatment \\(-a\\) periods 
+                          after the current time point and carryover effects due to the treatment \\(b\\) periods 
+                          before the current time point. To specify the minimum relative treatment period \\(a\\), 
+                          just input a positive nummber."), 
+                          numericInput("l_min", "What is the treatment horizon: minimum lead?", value = 15), 
+                          numericInput("l_max", "What is the treatment horizon: maximum lag?", value = 20)
+                        ), 
+                        mainPanel(
+                                  plotOutput("twfe_event_study_plot", height = "600px", width = "900px"), 
+                                  plotOutput("twfe_panelview", height = "600px", width = "900px")
+                          )
+                      )
+             ), 
+             
              
              tabPanel("Implied Weights Population",
                       sidebarLayout(
                         sidebarPanel(
                           h4("Estimand"), 
-                          selectInput("estimand_2", "Choose the estimand:",
-                                      c("ATE_{t0, inf, t1}" = "std2")), 
+                          radioButtons("estimand", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std2")),
                           withMathJax(),
-                          helpText('Estimand can be ATE\\(_{t_0, >t_0, t_1}\\), which is the average causal 
-                      effect the target population observed at time \\(t_1\\) from adopting the treatment 
-                      for the first time at time \\(t_0\\) to adopting the treatment sometime after time \\(t_0\\); '), 
-                          helpText('A special case of the estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
+                          helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
                       effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
                      time at time \\(t_0\\) to never adopting the treatment.'), 
                           
-                          sliderInput("t0_2",
-                                      "What is the t0 in the target estimand? ", 
-                                      value = 1975, 
-                                      min = 1964,
-                                      max = 1996), 
+                          numericInput("t0_2", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
                           withMathJax(),
                           helpText('\\(t_0\\) denotes the treatment initiation time.'),
                           
-                          sliderInput("t1_2",
-                                      "What is the t1 in the target estimand? ", 
-                                      value = 1980, 
-                                      min = 1964,
-                                      max = 1996), 
+                          numericInput("t1_2", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
                           withMathJax(),
-                          helpText('\\(t_1\\) denotes the time of observation.'),
+                          helpText('\\(t_1\\) denotes the treatment initiation time.'),
                           
                           # Horizontal line 
                           tags$hr(), 
                           h4("Implied Weights Population"), 
-                          h5("Implied Weighted States"), 
-                          checkboxInput("implied_state", 
+                          checkboxInput("implied_population", 
                                         'Show implied weighted states', TRUE), 
                           conditionalPanel(
-                            condition = "input.implied_state",
-                            checkboxInput("implied_state_by_year", 
+                            condition = "input.implied_population",
+                            checkboxInput("implied_population_by_time", 
                                           'Show implied weighted states by year', FALSE), 
                             conditionalPanel(
-                              condition = "input.implied_state_by_year",
-                              sliderInput("year_value",
-                                          "Show implied weighted states by the following year:", 
-                                          value = 1975, 
-                                          min = 1964,
-                                          max = 1996)
+                              condition = "input.implied_population_by_year",
+                              numericInput("year_value", 
+                                           "Show implied weighted population by the following time point:", value = 1980)
                             ), 
-                            checkboxInput("shade", 'Show differential implied weights (colored with shade)', FALSE)
+                            checkboxInput("shade", 'Show differential implied weights with shade.', FALSE), 
+                            checkboxInput("implied_map", "If the Units are US States, show a map of implied weighted population.", FALSE)
                           )
                         ), 
-                        mainPanel(plotOutput("implied"))
+                        mainPanel(plotOutput("implied", height = "600px", width = "900px"))
                       )
              ),
              
@@ -896,27 +334,20 @@ ui <- fluidPage(
                       sidebarLayout(
                         sidebarPanel(
                           h4("Estimand"), 
-                          selectInput("estimand_4", "Choose the estimand:",
-                                      c("ATE_{t0, inf, t1}" = "std4")), 
+                          radioButtons("estimand", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std3")),
                           withMathJax(),
                           helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
                       effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
                      time at time \\(t_0\\) to never adopting the treatment.'), 
-                          sliderInput("t0_4",
-                                      "What is the t0 in the target estimand? ", 
-                                      value = 1975, 
-                                      min = 1964,
-                                      max = 1996), 
+                          
+                          numericInput("t0_4", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
                           withMathJax(),
                           helpText('\\(t_0\\) denotes the treatment initiation time.'),
                           
-                          sliderInput("t1_4",
-                                      "What is the t1 in the target estimand? ", 
-                                      value = 1980, 
-                                      min = 1964,
-                                      max = 1996), 
+                          numericInput("t1_4", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
                           withMathJax(),
-                          helpText('\\(t_1\\) denotes the time of observation.'),
+                          helpText('\\(t_1\\) denotes the treatment initiation time.'),
                           
                           # Horizontal line 
                           tags$hr(), 
@@ -958,38 +389,28 @@ ui <- fluidPage(
                       sidebarLayout(
                         sidebarPanel(
                           h4("Estimand"), 
-                          selectInput("estimand_5", "Choose the estimand:",
-                                      c(
-                                        #"ATE_{t0, >t0, t1}" = "new5",
-                                        "ATE_{t0, inf, t1}" = "std5")),
+                          radioButtons("estimand", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std5")),
                           withMathJax(),
-                          helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal
-                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first
-                     time at time \\(t_0\\) to never adopting the treatment.'),
-                          sliderInput("t0_5",
-                                      "What is the t0 in the target estimand? ",
-                                      value = 1975,
-                                      min = 1964,
-                                      max = 1996),
+                          helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
+                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
+                     time at time \\(t_0\\) to never adopting the treatment.'), 
+                          
+                          
+                          numericInput("t0_5", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
                           withMathJax(),
                           helpText('\\(t_0\\) denotes the treatment initiation time.'),
                           
-                          sliderInput("t1_5",
-                                      "What is the t1 in the target estimand? ",
-                                      value = 1980,
-                                      min = 1964,
-                                      max = 1996),
+                          numericInput("t1_5", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
                           withMathJax(),
-                          helpText('\\(t_1\\) denotes the time of observation.'),
+                          helpText('\\(t_1\\) denotes the treatment initiation time.'),
                           
                           # Horizontal line
                           tags$hr(),
-                          
                           selectInput("influence_metric", "What influence metric to show:",
                                       c("Change of point estimate due to each observation." = "est_change", 
                                         "Exact SIC of each observation." = "sic",
                                         "Scaled SIC of each observation." = "sic_scaled"))
-                          
                         ), 
                         mainPanel(
                           plotOutput("infuence_plot_panel"), 
@@ -1007,6 +428,7 @@ ui <- fluidPage(
 
 server = function(input, output){
   
+  # reactive data frame of the study data, without all dummy columns; will be used for panel plotting
   input_data <- reactive({
     infile <- input$file
     if (is.null(infile)) {
@@ -1032,11 +454,25 @@ server = function(input, output){
              Treatment = factor(Treatment, level = c(1, 0))) %>% 
       group_by(Unit) %>% 
       # no non-missing arguments to min; returning Inf
-      mutate(TreatStartYear = min(Time[Treatment == 1])) %>% ungroup()
+      mutate(TreatStartTime = min(Time[Treatment == 1])) %>% ungroup() %>% 
+      mutate(
+        time_til = ifelse(is.finite(TreatStartTime), Time - TreatStartTime, -999), 
+        # construct lead and lag columns (in the range of our defined horizon)
+        lead = ifelse(time_til < 0, -1*time_til, "lag"), 
+        lag = ifelse(time_til >= 0, time_til, "lead")) 
     df
   })
   
+  # reactive data frame of the study data, with all dummy columns; will be used for fitting models and color decomposition 
+  input_data_augment <- reactive({
+    df_augment = input_data() %>% 
+      fastDummies::dummy_cols(select_columns = c("Unit", "Time", "lead", "lag")) %>% 
+      dplyr::select(-c("lead_lag", "lag_lead", "lead", "lag")) %>% 
+      dplyr::rename(lag_inf = lead_999)
+    df_augment
+  })
   
+  # reactive data frame of the study data with balanced format; will be used for panel plotting 
   panel_data <- reactive({
     panel_data = data.frame(
       cbind(
@@ -1050,14 +486,20 @@ server = function(input, output){
       mutate(Time = as.numeric(Time), 
              Unit = factor(Unit)) %>% 
       left_join(., input_data(), by = c("Unit", "Time")) %>% 
-      dplyr::select(Unit, Time, Outcome, Treatment, TreatStartYear) %>% 
-      mutate(Unit = factor(Unit, level = unique(Unit[order(TreatStartYear, decreasing = T)]) )) 
+      dplyr::select(X, Unit, Time, Outcome, Treatment, TreatStartTime, time_til) %>% 
+      mutate(Unit = factor(Unit, level = unique(Unit[order(TreatStartTime, decreasing = T)]) )) 
     panel_data
   })
   
+  # reactive data frame of the study data with calculated sample influences; will be used for SIC plotting 
+  inf_res = reactive({ 
+    GetInfluence(estimand = "std", t0 = input$t0_5, t1 = input$t1_5) 
+  })
+  
+  # Panel plotting 
   output$panel_fig = renderPlotly({
     panel_fig = ggplot(panel_data(), 
-                       aes(x = Time, y = Unit, label=Outcome, label2=TreatStartYear), position="identity")  +
+                       aes(x = Time, y = Unit, label=Outcome, label2=TreatStartTime), position="identity")  +
       geom_tile(color="gray80", fill="white", size=0.1, stat="identity") + 
       geom_point(aes(x = Time, y = Unit, shape = Treatment)) + 
       scale_shape_manual(values = c(19, 1)) + 
@@ -1065,10 +507,11 @@ server = function(input, output){
            title = "", 
            shape = "Treatment Status"
       ) + panelview_plot_tyle
-    ggplotly(panel_fig, height = 500, width = 730) %>% 
-     plotly::layout(legend=list(xanchor='center', yanchor='bottom', y = -0.35, x = 0.5, orientation='h'))
+    ggplotly(panel_fig, height = 600, width = 880) %>% 
+      plotly::layout(legend=list(xanchor='center', yanchor='bottom', y = -0.35, x = 0.5, orientation='h'))
   })
   
+  # Panel plotting 
   output$treat_prop_fig = renderPlot({
     
     treat_prop_fig = panel_data() %>% 
@@ -1086,620 +529,226 @@ server = function(input, output){
            y = "Proportion", 
            title = "", 
            fill = "Treatment Status"
-      ) + panelview_plot_tyle
+      ) 
     treat_prop_fig
-  }, height = 500, width = 730)
+  }, height = 600, width = 880)
+  
   
   output$panelview = renderPlot({
     
-    # define the valid control lead lag range
-    time_til_ubound <- input$t1_1-input$t0_1
-    time_til_lbound <- input$t1_1-max(data_study$year)
-    # generate visualization of the panel data 
-    panelview_data = data.frame(cbind(rep(unique(data_study$state), 
-                                          each = length(unique(data_study$year))), 
-                                      rep(unique(data_study$year), 
-                                          length(unique(data_study$state)))))
-    colnames(panelview_data) = c("state", "year")
-    panelview_data = panelview_data %>% 
-      mutate(year = as.numeric(year)) %>% 
-      left_join(., data_study, by = c("state", "year")) %>% 
-      dplyr::select(state, year, treat_status, time_til, treat_start_year) %>% 
-      mutate(state = factor(state, level = unique(state[order(treat_start_year, decreasing = T)]) )) 
-    
     if(input$estimand == "new1") {
+      # define the valid control lead lag range
+      time_til_ubound <- input$t1_1-input$t0_1
+      time_til_lbound <- input$t1_1-max(panel_data()$Time)
+      
       if (input$invariance) {
-        panelview_data = panelview_data %>% 
-          mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                                    ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                           | time_til==-999, "control", "invalid")))
+        panelview_data = panel_data() %>% 
+          mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                    ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Invalid")))
         if (input$anticipation) {
           if (input$washout) {
-            panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "control", 
-                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                                      | time_til==-999, "control", "control"))))
+            panelview_data = panel_data() %>% 
+              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "Control", 
+                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Control"))))
           } else {
-            panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "invalid", 
-                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                                      | time_til==-999, "control", "control"))))
+            panelview_data = panel_data() %>% 
+              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "Invalid", 
+                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Control"))))
           }
         } else {
           if (input$washout) {
-            panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "control", 
-                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                                      | time_til==-999, "control", "invalid"))))
+            panelview_data = panel_data() %>% 
+              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "Control", 
+                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Invalid"))))
           } else {
-            panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "invalid", 
-                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                                      | time_til==-999, "control", "invalid"))))
+            panelview_data = panel_data() %>% 
+              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "Invalid", 
+                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Invalid"))))
           }
         }
       } else {
-        panelview_data = panelview_data %>% 
-          mutate(
-            group_ind = 
-              ifelse(treat_start_year == input$t0_1 & year == input$t1_1, "treat", 
-                     ifelse(year == input$t1_1 & (between(time_til, time_til_lbound, time_til_ubound) 
-                                                  | time_til==-999), "control", "invalid")))
+        panelview_data = panel_data() %>% 
+          mutate(group_ind = ifelse(TreatStartTime == input$t0_1 & Time == input$t1_1, "Treat", 
+                                    ifelse(Time == input$t1_1 & (between(time_til, time_til_lbound, time_til_ubound) | time_til==-999), "Control", "Invalid")))
       }
       
       if (!input$highlight) {
-        
         panelview_data = panelview_data %>% 
-          mutate(year = factor(year, levels = 1964:1996), 
-                 treat_status = factor(treat_status, levels = c(1, 0)))
+          mutate(Time = factor(Time), 
+                 group_ind = factor(group_ind, levels = c("Treat", "Control", "Invalid")))
         
-        panelview = ggplot(panelview_data, 
-                           aes(x = year, y = state), position = "identity")  +
+        panelview = ggplot(panelview_data, aes(x = Time, y = Unit), position = "identity")  +
           geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") + 
           scale_fill_manual(values=obs_colors) + 
-          geom_point(aes(x = year, y = state, shape = treat_status)) + 
+          geom_point(aes(x = Time, y = Unit, shape = Treatment)) + 
           scale_shape_manual(values = c(19, 1)) + 
-          labs(x = "Year", y = "State", title = "", 
+          labs(x = "Time", y = "Unit", title = "", 
                fill = "Observation Group", 
-               shape = "Treatment Status"
-          ) + panelview_plot_tyle
+               shape = "Treatment Status") + 
+          panelview_plot_tyle
+        
       } else {
-        panelview_data = panelview_data %>%
-          mutate(
-            group_ind = ifelse(time_til == input$t1_1-input$t0_1, "treat",
-                               ifelse(time_til > max(time_til_lbound:time_til_ubound), "Dissipate",
-                                      ifelse(between(time_til, time_til_lbound, time_til_ubound)
-                                             | time_til==-999, "control", "LimitAnticipate"))))
-        
+        panelview_data = GetObsGroup(panel_data(), t0 = input$t0_1, t1 = input$t1_1, estimand = "new") 
         panelview_data = panelview_data %>% 
-          mutate(year = factor(year, levels = 1964:1996), 
-                 treat_status = factor(treat_status, levels = c(1, 0)))
+          mutate(Time = factor(Time))
         
-        panelview = ggplot(panelview_data, 
-                           aes(x = year, y = state), position = "identity")  +
+        panelview = ggplot(panelview_data, aes(x = Time, y = Unit), position = "identity")  +
           geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") + 
-          scale_fill_manual(values=obs_colors) + 
-          geom_point(aes(x = year, y = state, shape = treat_status)) + 
+          scale_fill_manual(values=ess_obs_colors) + 
+          geom_point(aes(x = Time, y = Unit, shape = Treatment)) + 
           scale_shape_manual(values = c(19, 1)) + 
-          labs(x = "Year", y = "State", title = "", 
+          labs(x = "Time", y = "Unit", title = "", 
                fill = "Observation Group", 
-               shape = "Treatment Status"
-          ) + panelview_plot_tyle
+               shape = "Treatment Status") + 
+          panelview_plot_tyle + 
+          guides(fill = guide_legend(order = 1), shape = guide_legend(order = 2))
       } 
-      
     } else {
-      
-      ctrl_year_ubound <- max(as.numeric(data_study$year[data_study$time_til==input$t1_1-input$t0_1]))
-      ctrl_year_lbound <- min(as.numeric(data_study$year[data_study$time_til==input$t1_1-input$t0_1]))
-      
-      panelview_data = panelview_data %>% 
-        mutate(group_ind = 
-                 ifelse(treat_start_year == input$t0_1 & year == input$t1_1, "treat", 
-                        ifelse(treat_start_year == 9999 & year == input$t1_1, "control", "invalid")))
-      
+      panelview_data = panel_data() %>% 
+        mutate(group_ind = ifelse(TreatStartTime == input$t0_1 & Time == input$t1_1, "Treat", 
+                                  ifelse(TreatStartTime == Inf & Time == input$t1_1, "Control", "Invalid")))
       if (input$invariance) {
         panelview_data = panelview_data %>% 
-          mutate(group_ind = 
-                   ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                          ifelse(time_til == -999, "control", "invalid")))
-        
+          mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                    ifelse(time_til == -999, "Control", "Invalid")))
         if (input$anticipation) {
           panelview_data = panelview_data %>% 
-            mutate(group_ind = 
-                     ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                            ifelse(treat_status == 0, "control", "invalid")))
+            mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                      ifelse(Treatment == 0, "Control", "Invalid")))
           if (input$washout) {
             panelview_data = panelview_data %>% 
-              mutate(group_ind = 
-                       ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                              ifelse((treat_status == 0 | time_til > input$t1_1-input$t0_1), "control", "invalid")))
+              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                        ifelse((Treatment == 0 | time_til > input$t1_1-input$t0_1), "Control", "Invalid")))
             if (input$delay) {
               panelview_data = panelview_data %>% 
-                mutate(group_ind = 
-                         ifelse(time_til == input$t1_1-input$t0_1, "treat", "control"))
+                mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", "Control"))
             }
           } else {
             if (input$delay) {
               panelview_data = panelview_data %>% 
-                mutate(group_ind = 
-                         ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                                ifelse(time_til < input$t1_1-input$t0_1, "control", "invalid")))
+                mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                          ifelse(time_til < input$t1_1-input$t0_1, "Control", "Invalid")))
             }
           }
         } else {
           # if limited anticipation does not hold 
           if (input$washout) {
             panelview_data = panelview_data %>% 
-              mutate(group_ind = 
-                       ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                              ifelse(time_til > input$t1_1-input$t0_1 | time_til == -999, "control", "invalid")))
+              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                        ifelse(time_til > input$t1_1-input$t0_1 | time_til == -999, "Control", "Invalid")))
             if (input$delay) {
               panelview_data = panelview_data %>% 
-                mutate(group_ind = 
-                         ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                                ifelse(treat_status == 1 | time_til == -999, "control", "invalid")))
+                mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                          ifelse(Treatment == 1 | time_til == -999, "Control", "Invalid")))
             }
           } else {
             if (input$delay) {
               panelview_data = panelview_data %>% 
-                mutate(group_ind = 
-                         ifelse(time_til == input$t1_1-input$t0_1, "treat", 
-                                ifelse((treat_status == 1 & time_til < input$t1_1-input$t0_1) | time_til == -999, "control", "invalid")))
+                mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                                          ifelse((Treatment == 1 & time_til < input$t1_1-input$t0_1) | time_til == -999, "Control", "Invalid")))
             }
           }
         }
       }
       
       if (input$highlight) {
+        panelview_data = GetObsGroup(panel_data(), t0 = input$t0_1, t1 = input$t1_1, estimand = "std")
         panelview_data = panelview_data %>% 
-          mutate(group_ind = 
-                   ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
-                          ifelse(time_til == -999, "Never", 
-                                 ifelse(treat_status == 0 & time_til < input$t1_1-input$t0_1, "LimitAnticipate", 
-                                        ifelse(treat_status == 1 & time_til > input$t1_1-input$t0_1, "Dissipate", "DelayOnset")))))
-        
-        panelview_data = panelview_data %>% 
-          mutate(year = factor(year, levels = 1964:1996), 
-                 treat_status = factor(treat_status, levels = c(1, 0)), 
-                 group_ind = factor(group_ind, levels = c("Treat", "Never", "LimitAnticipate", "DelayOnset", "Dissipate")))
-        
+          mutate(Time = factor(Time))
         panelview = ggplot(panelview_data,
-                           aes(x = year, y = state), position = "identity")  +
+                           aes(x = Time, y = Unit), position = "identity")  +
           geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") +
-          scale_fill_manual(values=obs_usual_colors) +
-          geom_point(data = panelview_data, aes(x = year, y = state, shape = treat_status)) +
+          scale_fill_manual(values=ess_obs_colors) +
+          geom_point(data = panelview_data, aes(x = Time, y = Unit, shape = Treatment)) +
           scale_shape_manual(values = c(19, 1)) +
-          labs(x = "Year", y = "State", title = "",
+          labs(x = "Time", y = "Unit", title = "",
                fill = "Observation Group",
-               shape = "Treatment Status"
-          ) +
+               shape = "Treatment Status") +
           panelview_plot_tyle
       } else {
         panelview_data = panelview_data %>% 
-          mutate(year = factor(year, levels = 1964:1996), 
-                 treat_status = factor(treat_status, levels = c(1, 0)))
-        
-        panelview = ggplot(panelview_data,
-                           aes(x = year, y = state), position = "identity")  +
+          mutate(Time = factor(Time), 
+                 group_ind = factor(group_ind, levels = c("Treat", "Control", "Invalid")))
+        panelview = ggplot(panelview_data, aes(x = Time, y = Unit), position = "identity")  +
           geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") +
           scale_fill_manual(values=obs_colors) +
-          geom_point(data = panelview_data, aes(x = year, y = state, shape = treat_status)) +
+          geom_point(data = panelview_data, aes(x = Time, y = Unit, shape = Treatment)) +
           scale_shape_manual(values = c(19, 1)) +
-          labs(x = "Year", y = "State", title = "",
+          labs(x = "Time", y = "Unit", title = "",
                fill = "Observation Group",
-               shape = "Treatment Status"
-          ) +
+               shape = "Treatment Status") +
           panelview_plot_tyle
       }
     }
     panelview}, 
-    height = 500, width = 730)
+    height = 600, width = 880)
   
   
-  output$estimatePlot = renderPlot({
+  output$twfe_event_study_plot = renderPlot({
     
-    # define the valid control lead lag range
-    time_til_ubound <- input$t1_3-input$t0_3
-    time_til_lbound <- input$t1_3-max(data_study$year)
+    event_study_formula <- as.formula(
+      paste("Outcome ~",
+            paste(
+              paste(paste("lead_", 1:input$l_min, sep = ""), collapse = " + "),
+              paste(paste("lag_", 0:input$l_max, sep = ""), collapse = " + "), sep = " + "),
+            "| Time + Unit | 0 | Unit"
+      ),
+    )
+    event_study_reg <- felm(event_study_formula, data = input_data_augment())
+    # order of the coefficients for the plot
+    plot_order <- c(paste("lead_", input$l_min:1, sep = ""), paste("lag_", 0:input$l_max, sep = ""))
+    coef_lead1 <- coef(event_study_reg)["lead_1"]
     
-    # generate visualization of the panel data 
-    panelview_data = data.frame(cbind(rep(unique(data_study$state), each = length(unique(data_study$year))), 
-                                      rep(unique(data_study$year), length(unique(data_study$state)))))
-    colnames(panelview_data) = c("state", "year")
-    
-    if(input$estimand_3 == "new3") {
-      panelview_data = panelview_data %>% 
-        mutate(year = as.numeric(year)) %>% 
-        left_join(., data_study, by = c("state", "year")) %>% 
-        dplyr::select(state, year, treat_status, time_til, treat_start_year) %>% 
-        mutate(state = factor(state, level = unique(state[order(treat_start_year, decreasing = T)]) ), 
-               year = factor(year, level = min(year):max(year)), 
-               treat_status = factor(treat_status, level = c(1, 0)))
-      
-      if (input$invariance_3) {
-        panelview_data = panelview_data %>% 
-          mutate(group_ind = 
-                   ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-                          ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                 | time_til==-999, "control", "invalid")))
-        if (input$anticipation_3) {
-          if (input$washout) {
-            panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "control", 
-                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                                      | time_til==-999, "control", "control"))))
-          } else {
-            panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "invalid", 
-                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                                      | time_til==-999, "control", "control"))))
-          }
-        } else {
-          if (input$washout) {
-            panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "control", 
-                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                                      | time_til==-999, "control", "invalid"))))
-          } else {
-            panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "invalid", 
-                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-                                                      | time_til==-999, "control", "invalid"))))
-          }
-        }
-      } else {
-        panelview_data = panelview_data %>% 
-          mutate(
-            group_ind = 
-              ifelse(treat_start_year == input$t0_3 & year == input$t1_3, "treat", 
-                     ifelse(year == input$t1_3 & (between(time_til, time_til_lbound, time_til_ubound) 
-                                                  | time_til==-999), "control", "invalid")))
-      }
-      
-      if (!input$highlight_3) {
-        panelview = ggplot(panelview_data, 
-                           aes(x = year, y = state), position = "identity")  +
-          geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") + 
-          scale_fill_manual(values=obs_colors) + 
-          geom_point(data = panelview_data, aes(x = year, y = state, shape = treat_status)) + 
-          scale_shape_manual(values = c(19, 1)) + 
-          labs(x = "Year", y = "State", title = "", 
-               fill = "Observation Group", 
-               shape = "Treatment Status") + panelview_plot_tyle
-      } else {
-        panelview_data = panelview_data %>%
-          mutate(
-            group_ind = ifelse(time_til == input$t1_3-input$t0_3, "treat",
-                               ifelse(time_til > max(time_til_lbound:time_til_ubound), "LimitAnticipate",
-                                      ifelse(between(time_til, time_til_lbound, time_til_ubound)
-                                             | time_til==-999, "control", "LimitAnticipate"))))
-        
-        panelview = ggplot(panelview_data, 
-                           aes(x = year, y = state), position = "identity")  +
-          geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") + 
-          scale_fill_manual(values=obs_colors) + 
-          geom_point(data = panelview_data, aes(x = year, y = state, shape = treat_status)) + 
-          scale_shape_manual(values = c(19, 1)) + 
-          labs(x = "Year", y = "State", title = "", 
-               fill = "Observation Group", 
-               shape = "Treatment Status") + panelview_plot_tyle
-      } 
-    } else {
-      
-      panelview_data = panelview_data %>% 
-        mutate(year = as.numeric(year)) %>% 
-        left_join(., data_study, by = c("state", "year")) %>% 
-        dplyr::select(state, year, treat_status, time_til, treat_start_year) %>% 
-        mutate(state = factor(state, level = unique(state[order(treat_start_year, decreasing = T)]) ), 
-               treat_status = factor(treat_status, level = c(1, 0)))
-      
-      ctrl_year_ubound <- max(as.numeric(data_study$year[data_study$time_til==input$t1_3-input$t0_3]))
-      ctrl_year_lbound <- min(as.numeric(data_study$year[data_study$time_til==input$t1_3-input$t0_3]))
-      ctrl_years <- as.numeric(data_study$year[data_study$time_til==input$t1_3-input$t0_3])
-      
-      if (input$invariance_3) {
-        # panelview_data = panelview_data %>% 
-        #     mutate(group_ind = 
-        #                ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-        #                       ifelse(between(year, ctrl_year_lbound, ctrl_year_ubound) & 
-        #                                  time_til == -999 &
-        #                                  year %in% ctrl_years, "control", "invalid")), 
-        #            year = factor(year, level = min(year):max(year))
-        #     ) 
-        
-        #SZ 20231212: change to stronger version for balancing appraoch to find solution 
-        panelview_data = panelview_data %>% 
-          mutate(group_ind = 
-                   ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-                          ifelse(time_til == -999, "control", "invalid")), 
-                 year = factor(year, level = min(year):max(year))
-          ) 
-        
-      } else {
-        panelview_data = panelview_data %>% 
-          mutate(group_ind = 
-                   ifelse(treat_start_year == input$t0_3 & year == input$t1_3, "treat", 
-                          ifelse(year == input$t1_3 & time_til==-999, "control", "invalid")), 
-                 year = factor(year, level = min(year):max(year)))
-      }
-      
-      panelview = ggplot(panelview_data,
-                         aes(x = year, y = state), position = "identity")  +
-        geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") +
-        scale_fill_manual(values=obs_colors) +
-        geom_point(data = panelview_data, aes(x = year, y = state, shape = treat_status)) +
-        scale_shape_manual(values = c(19, 1)) +
-        labs(x = "Year", y = "State", title = "",
-             fill = "Observation Group",
-             shape = "Treatment Status") + panelview_plot_tyle
-    }
-    panelview}, 
-    height = 400, width = 630)
+    # grab the clustered standard errors and average coefficient estimates
+    # from the regression, label them accordingly add a zero'th lag for plotting purposes
+    leadslags_plot <- tibble(
+      sd = c(event_study_reg$cse[plot_order]),
+      mean = c(coef(event_study_reg)[plot_order]),
+      label = c(-input$l_min:-1, 0:input$l_max)
+    )
+    # make the sd of lead -1 (reference group) as NA 
+    leadslags_plot$sd[leadslags_plot$label == -1] = NA
+    # An interval that traces the confidence intervals of coefficients
+    p = leadslags_plot %>%
+      ggplot(aes(x = label, y = mean-coef_lead1,
+                 ymin = mean-coef_lead1-1.96*sd, 
+                 ymax = mean-coef_lead1+1.96*sd)) +
+      geom_line() + 
+      geom_errorbar(col = "gray70", width = 0.5, lty = 1) +
+      geom_point() +
+      theme_bw() +
+      labs(x = "Relative Time Periods", y = "Estimated Effects", title = "Event Study Plot by TWFE Model") +
+      geom_hline(yintercept = 0, lty = 2) +
+      geom_vline(xintercept = -1, lty = 2) + 
+      theme(axis.title.x = element_text(size = 12, margin = margin(t = 8, r = 0, b = 0, l = 0)),
+            axis.title.y = element_text(size = 12, margin = margin(t = 0, r = 8, b = 0, l = 0)),
+            axis.text.x = element_text(face="bold", size = 10, angle = 0, hjust=0.5, vjust=0),
+            axis.text.y = element_text(face="bold", size = 10),
+            plot.title = element_text(size=15, hjust = 0.5, face="bold", margin = margin(8, 0, 8, 0)))
+    p
+    }, height = 600, width = 880)
   
-  output$estimates = renderTable({
+  output$twfe_panelview = renderPlot({
+    panelview_data = panel_data %>% 
+      mutate(group_ind = ifelse(time_til == input$t1_6-input$t0_6, "Treat", "Control"), 
+             Time = factor(Time),
+             group_ind = factor(group_ind, levels = c("Treat", "Control", "Invalid")))
     
-    EstimateLeadLag = function(estimand, t0, t1) {
-      # define the valid control lead lag range
-      time_til_ubound <- t1-t0
-      time_til_lbound <- t1-max(data_study$year)
-      
-      if (estimand == "std") {
-        # Simple Average 
-        # minimal assumption 
-        data_study_treat1 = data_study_augment %>% 
-          filter(year == t1 & treat_start_year == t0)
-        data_study_control1 = data_study_augment %>% 
-          filter(year == t1 & treat_start_year == 9999)
-        est1 = mean(data_study_treat1$asmrs) - mean(data_study_control1$asmrs)
-        
-        # minimal assumption + invariance to time shifts 
-        data_study_treat2 = data_study_augment %>% filter(time_til == t1-t0) 
-        data_study_control2 = data_study_augment %>% 
-          filter(year %in% data_study_treat2$year & treat_start_year == 9999)
-        est2 = mean(data_study_treat2$asmrs) - mean(data_study_control2$asmrs)
-        
-        # all observations
-        data_study_treat3 = data_study_augment %>% filter(time_til == t1-t0) 
-        data_study_control3 = data_study_augment %>% 
-          filter(! X %in% data_study_treat3$X)
-        est3 = mean(data_study_treat3$asmrs) - mean(data_study_control3$asmrs)
-        
-        mean_diff = round(c(est1, est2, est3), 3)
-        
-        # TWFE
-        event_study_formula <- as.formula(
-          paste("asmrs ~ ",
-                paste(
-                  paste(paste("lead_", 1:lead_min, sep = ""), collapse = " + "),
-                  paste(paste("lag_", 0:lag_max, sep = ""), collapse = " + "), sep = " + "),
-                "| year + state | 0 | state"
-          ),
-        )
-        # all observations
-        data_study_augment_w = data_study_augment %>% 
-          mutate(w = ifelse(X %in% c(data_study_treat3$X, data_study_control3$X), 1, 0)) %>% pull(w)
-        event_study_reg_w <- felm(event_study_formula, data = data_study_augment, weights = data_study_augment_w)
-        coeff_w3 = coef(event_study_reg_w)
-        names(coeff_w3) = c(paste("lead_", 1:lead_min, sep = ""), paste("lag_", 0:lag_max, sep = ""))
-        target_name = ifelse(t1 >= t0, paste0("lag_", t1-t0, sep=""), paste0("lead_", t0-t1, sep=""))
-        twfe_est = c("-", "-", round(coeff_w3[target_name], 3))
-        
-        # Balance 
-        # define moment covariates
-        bal = list()
-        bal$bal_cov = baseline_covariates
-        ### Set tolerances
-        bal$bal_std = "group"
-        # Use adaptive algorithm 
-        bal$bal_alg = TRUE
-        bal$bal_gri = c(0.0001, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1)
-        
-        data_study_augment_subset = data_study_augment %>% 
-          filter(year == t1) %>% 
-          filter(treat_start_year %in% c(t0, 9999)) %>% 
-          mutate(treat_ind = ifelse(treat_start_year == t0, 1, 0)) %>% 
-          dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs)
-        
-        df = as.data.frame(cbind(data_study_augment_subset$X, 
-                                 data_study_augment_subset$treat_ind, 
-                                 data_study_augment_subset[, baseline_covariates], 
-                                 data_study_augment_subset$asmrs))
-        names(df) = c("idx", "t", baseline_covariates, "Y")
-        sbwatt_object_1 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-        
-        data_study_augment_subset = data_study_augment %>% 
-          filter(X %in% c(data_study_treat2$X, data_study_control2$X)) %>% 
-          mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
-          dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs)
-        df = as.data.frame(cbind(data_study_augment_subset$X, 
-                                 data_study_augment_subset$treat_ind, 
-                                 data_study_augment_subset[, baseline_covariates], 
-                                 data_study_augment_subset$asmrs))
-        names(df) = c("idx", "t", baseline_covariates, "Y")
-        sbwatt_object_2 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-        
-        data_study_augment_subset = data_study_augment %>% 
-          filter(X %in% c(data_study_treat3$X, data_study_control3$X)) %>% 
-          mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
-          dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs)
-        df = as.data.frame(cbind(data_study_augment_subset$X, 
-                                 data_study_augment_subset$treat_ind, 
-                                 data_study_augment_subset[, baseline_covariates], 
-                                 data_study_augment_subset$asmrs))
-        names(df) = c("idx", "t", baseline_covariates, "Y")
-        sbwatt_object_3 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
-        
-        balance_est1 = tryCatch(round(as.numeric(estimate(sbwatt_object_1)[[1]][1]), 3), error=function(e) NULL)
-        balance_est2 = tryCatch(round(as.numeric(estimate(sbwatt_object_2)[[1]][1]), 3), error=function(e) NULL)
-        balance_est3 = tryCatch(round(as.numeric(estimate(sbwatt_object_3)[[1]][1]), 3), error=function(e) NULL)
-        
-        if (is.null(balance_est1)) {
-          balance_est1 = "-"
-        } 
-        
-        if (is.null(balance_est2)) {
-          balance_est2 = "-"
-        }
-        
-        if (is.null(balance_est3)) {
-          balance_est3 = "-"
-        }
-        
-        balance_est = c(balance_est1, balance_est2, balance_est3)
-        
-        summary = rbind(mean_diff, twfe_est, balance_est)
-        rownames(summary) = c("Mean Difference", "TWFE", "Balance")
-        colnames(summary) = c("Ideal Experiment", "Time Shift Invariance", "All Observations")
-        summary
-        
-      } else if (estimand == "new") {
-        
-        treat_idx = data_study$X[data_study$time_til == t1-t0]
-        
-        control_idx = data_study$X[(between(data_study$time_til, time_til_lbound, time_til_ubound) 
-                                    | data_study$time_til==-999) & data_study$time_til != t1-t0]
-        
-        early_idx = data_study$X[data_study$time_til > max(time_til_lbound:time_til_ubound)]
-        
-        late_idx = data_study$X[data_study$time_til < min(time_til_lbound:time_til_ubound) & 
-                                  data_study$time_til != -999]
-        
-        # Simple Average 
-        # minimal assumption 
-        data_study_treat1 = data_study_augment %>% 
-          filter(year == t1 & treat_start_year == t0)
-        data_study_control1 = data_study_augment %>% 
-          filter(year == t1 & treat_start_year > t0)
-        est1 = mean(data_study_treat1$asmrs) - mean(data_study_control1$asmrs)
-        
-        # minimal assumption + invariance to time shifts 
-        data_study_treat2 = data_study_augment %>% filter(time_til == t1-t0) 
-        data_study_control2 = data_study_augment %>% filter(X %in% control_idx)
-        est2 = mean(data_study_treat2$asmrs) - mean(data_study_control2$asmrs)
-        
-        # all observations
-        data_study_treat3 = data_study_augment %>% filter(time_til == t1-t0) 
-        data_study_control3 = data_study_augment %>% filter(! X %in% data_study_treat3$X)
-        est3 = mean(data_study_treat3$asmrs) - mean(data_study_control3$asmrs)
-        mean_diff = round(c(est1, est2, est3), 3)
-        
-        # TWFE
-        event_study_formula <- as.formula(
-          paste("asmrs ~ ",
-                paste(
-                  # paste(baseline_covariates, collapse = " + "),
-                  paste(paste("lead_", 1:lead_min, sep = ""), collapse = " + "),
-                  paste(paste("lag_", 0:lag_max, sep = ""), collapse = " + "), sep = " + "),
-                "| year + state | 0 | state"
-          )
-        )
-        
-        # all observations
-        data_study_augment_w = data_study_augment %>%
-          mutate(w = ifelse(X %in% c(data_study_treat3$X, data_study_control3$X), 1, 0)) %>% pull(w)
-        event_study_reg_w <- felm(event_study_formula, data = data_study_augment, weights = data_study_augment_w)
-        coeff_w3 = coef(event_study_reg_w)
-        names(coeff_w3) = c(paste("lead_", 1:lead_min, sep = ""), paste("lag_", 0:lag_max, sep = ""))
-        target_name = ifelse(t1 >= t0, paste0("lag_", t1-t0, sep=""), paste0("lead_", t0-t1, sep=""))
-        twfe_est = c("-", "-", round(coeff_w3[target_name], 3))
-        
-        if (t1 >= t0) {
-          correction_lags = paste("lag_", (t1-t0+1):lag_max, sep = "")
-        } else {
-          correction_lags = c(paste("lead_", (t0-t1+1):lead_min, sep = ""),
-                              paste("lag_", 0:lag_max, sep = ""))
-        }
-        
-        correction = 0
-        for (lag in correction_lags) {
-          prop_lag = sum(data_study_augment[, lag] == 1) / nrow(data_study_augment)
-          correction = correction + as.numeric(prop_lag * coeff_w3[lag])
-        }
-        coeff_w3[target_name] = coeff_w3[target_name] - correction
-        twfe_est = c("-", "-", round(coeff_w3["lag_5"], 3))
-        
-        # Balance 
-        data_study_augment_subset = data_study_augment %>% 
-          filter(year == t1) %>% 
-          filter(treat_start_year >= t0) %>% 
-          mutate(treat_ind = ifelse(treat_start_year == t0, 1, 0)) %>% 
-          dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs)
-        
-        df = as.data.frame(cbind(data_study_augment_subset$X, 
-                                 data_study_augment_subset$treat_ind, 
-                                 data_study_augment_subset[, baseline_covariates], 
-                                 data_study_augment_subset$asmrs))
-        names(df) = c("idx", "t", baseline_covariates, "Y")
-        sbwatt_object_1 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error = function(e) NULL)
-        
-        data_study_augment_subset = data_study_augment %>% 
-          filter(X %in% c(data_study_treat2$X, data_study_control2$X)) %>% 
-          mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
-          dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs)
-        df = as.data.frame(cbind(data_study_augment_subset$X, 
-                                 data_study_augment_subset$treat_ind, 
-                                 data_study_augment_subset[, baseline_covariates], 
-                                 data_study_augment_subset$asmrs))
-        names(df) = c("idx", "t", baseline_covariates, "Y")
-        sbwatt_object_2 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) NULL)
-        
-        data_study_augment_subset = data_study_augment %>% 
-          filter(X %in% c(data_study_treat3$X, data_study_control3$X)) %>% 
-          mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
-          dplyr::select(X, treat_ind, any_of(baseline_covariates), asmrs)
-        df = as.data.frame(cbind(data_study_augment_subset$X, 
-                                 data_study_augment_subset$treat_ind, 
-                                 data_study_augment_subset[, baseline_covariates], 
-                                 data_study_augment_subset$asmrs))
-        names(df) = c("idx", "t", baseline_covariates, "Y")
-        sbwatt_object_3 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) NULL)
-        
-        
-        balance_est1 = tryCatch(round(as.numeric(estimate(sbwatt_object_1)[[1]][1]), 3), error=function(e) NULL)
-        balance_est2 = tryCatch(round(as.numeric(estimate(sbwatt_object_2)[[1]][1]), 3), error=function(e) NULL)
-        balance_est3 = tryCatch(round(as.numeric(estimate(sbwatt_object_3)[[1]][1]), 3), error=function(e) NULL)
-        
-        if (is.null(balance_est1)) {
-          balance_est1 = "-"
-        } 
-        
-        if (is.null(balance_est2)) {
-          balance_est2 = "-"
-        }
-        
-        if (is.null(balance_est3)) {
-          balance_est3 = "-"
-        }
-        
-        balance_est = c(balance_est1, balance_est2, balance_est3)
-        summary = rbind(mean_diff, twfe_est, balance_est)
-        rownames(summary) = c("Mean Difference", "TWFE", "Balance")
-        colnames(summary) = c("Ideal Experiment", "Time Shift Invariance", "All Observations")
-        summary
-      }
-    }
-    
-    if (input$estimand_3 == "std3") {
-      EstimateLeadLag(estimand = "std", t0 = input$t0_3, t1 = input$t1_3)
-    } else if (input$estimand_3 == "new3") {
-      EstimateLeadLag(estimand = "new", t0 = input$t0_3, t1 = input$t1_3)
-    }
-  }, 
-  striped = TRUE,
-  spacing = "l",
-  digits = 3,
-  rownames = TRUE, 
-  width = "100%",
-  caption = ""
-  )
+    panelview = ggplot(panelview_data, aes(x = Time, y = Unit), position = "identity")  +
+      geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") +
+      scale_fill_manual(values=obs_colors) +
+      geom_point(data = panelview_data, aes(x = Time, y = Unit, shape = Treatment)) +
+      scale_shape_manual(values = c(19, 1)) +
+      labs(x = "Time", y = "Unit", title = "Treatment and Control Component Implied by TWFE Model",
+           fill = "",
+           shape = "Treatment Status") +
+      panelview_plot_tyle
+    panelview
+  }, height = 600, width = 880)
   
   output$ess_plot = renderPlot({
     if (input$estimand_4 == "std4") {
@@ -1784,10 +833,6 @@ server = function(input, output){
   width = "100%",
   caption = ""
   )
-  
-  inf_res = reactive({ 
-    GetInfluence(estimand = "std", t0 = input$t0_5, t1 = input$t1_5) 
-  })
   
   output$infuence_plot_panel = renderPlot({
     PlotESS(estimand = "std", t0 = input$t0_5, t1 = input$t1_5) 
@@ -1977,142 +1022,26 @@ server = function(input, output){
     
     
     ################ Render Plot ################
-    if (input$implied_state) {
-      if (input$implied_state_by_year) {
-        MapPlot(year_value = input$year_value, shade=input$shade)
-      } else {
-        if (input$shade) {
-          MapPlot(year_value = NULL, shade=TRUE)
+    if (input$implied_population) {
+      if (input$implied_population_by_time) {
+        if (input$implied_map) {
+          MapPlot(year_value = input$year_value, shade=input$shade)
         } else {
-          MapPlot(year_value = NULL, shade=FALSE)
-        } 
+          
+        }
+        
+      } else {
+        if (input$implied_map) {
+          if (input$shade) {
+            MapPlot(year_value = NULL, shade=TRUE)
+          } else {
+            MapPlot(year_value = NULL, shade=FALSE)
+          } 
+        }
       }
     } 
     
   })
-  
-  
-  
-  
-  
-  # output$subplot = renderPlot({
-  #     
-  #     time_til_ubound <- input$t1_3-input$t0_3
-  #     time_til_lbound <- input$t1_3-max(data_study$year)
-  #     
-  #     # generate visualization of the panel data 
-  #     panelview_data = data.frame(cbind(rep(unique(data_study$state), each = length(unique(data_study$year))), 
-  #                                       rep(unique(data_study$year), length(unique(data_study$state)))))
-  #     colnames(panelview_data) = c("state", "year")
-  #     
-  #     if(input$estimand == "new3") {
-  #         panelview_data = panelview_data %>% 
-  #             mutate(year = as.numeric(year)) %>% 
-  #             left_join(., data_study, by = c("state", "year")) %>% 
-  #             dplyr::select(state, year, treat_status, time_til, treat_start_year) %>% 
-  #             mutate(state = factor(state, level = unique(state[order(treat_start_year, decreasing = T)]) ), 
-  #                    year = factor(year, level = min(year):max(year)), 
-  #                    treat_status = factor(treat_status, level = c(1, 0)))
-  #             
-  #         if (input$invariance_3) {
-  #             panelview_data = panelview_data %>% 
-  #                 mutate(group_ind = 
-  #                            ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-  #                                   ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-  #                                          | time_til==-999, "control", "invalid")))
-#             if (input$anticipation_3) {
-#                 if (input$washout_3) {
-#                     panelview_data = panelview_data %>% 
-#                         mutate(group_ind = ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-#                                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "control", 
-#                                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-#                                                                      | time_til==-999, "control", "control"))))
-#                 } else {
-#                     panelview_data = panelview_data %>% 
-#                         mutate(group_ind = ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-#                                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "invalid", 
-#                                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-#                                                                      | time_til==-999, "control", "control"))))
-#                 }
-#             } else {
-#                 if (input$washout_3) {
-#                     panelview_data = panelview_data %>% 
-#                         mutate(group_ind = ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-#                                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "control", 
-#                                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-#                                                                      | time_til==-999, "control", "invalid"))))
-#                 } else {
-#                     panelview_data = panelview_data %>% 
-#                         mutate(group_ind = ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-#                                                        ifelse(time_til > max(time_til_lbound:time_til_ubound), "invalid", 
-#                                                               ifelse(between(time_til, time_til_lbound, time_til_ubound) 
-#                                                                      | time_til==-999, "control", "invalid"))))
-#                 }
-#             }
-#         } else {
-#             panelview_data = panelview_data %>% 
-#                 mutate(
-#                     group_ind = 
-#                         ifelse(treat_start_year == input$t0_3 & year == input$t1_3, "treat", 
-#                                ifelse(year == input$t1_3 & (between(time_til, time_til_lbound, time_til_ubound) 
-#                                                             | time_til==-999), "control", "invalid")))
-#         }
-#         
-#         panelview = ggplot(panelview_data, aes(x = year, y = state, fill = group_ind), position = "identity")  +
-#             geom_tile(colour="gray90", size=0.1, stat="identity") + 
-#             scale_fill_manual(values=obs_colors) + 
-#             geom_point(data = panelview_data, aes(x = year, y = state, shape = treat_status)) + 
-#             scale_shape_manual(values = c(19, 1)) + 
-#             labs(x = "Year", y = "State", title = "", 
-#                  fill = "Observation Group", 
-#                  shape = "Treatment Status") + 
-#             panelview_plot_tyle
-#         
-#         } else {
-#             
-#             panelview_data = panelview_data %>% 
-#                 mutate(year = as.numeric(year)) %>% 
-#                 left_join(., data_study, by = c("state", "year")) %>% 
-#                 dplyr::select(state, year, treat_status, time_til, treat_start_year) %>% 
-#                 mutate(state = factor(state, level = unique(state[order(treat_start_year, decreasing = T)]) ), 
-#                        treat_status = factor(treat_status, level = c(1, 0)))
-#             
-#             ctrl_year_ubound <- max(as.numeric(data_study$year[data_study$time_til==input$t1_3-input$t0_3]))
-#             ctrl_year_lbound <- min(as.numeric(data_study$year[data_study$time_til==input$t1_3-input$t0_3]))
-#             ctrl_years <- as.numeric(data_study$year[data_study$time_til==input$t1_3-input$t0_3])
-#             
-#             if (input$invariance_3) {
-#                 panelview_data = panelview_data %>% 
-#                     mutate(group_ind = 
-#                                ifelse(time_til == input$t1_3-input$t0_3, "treat", 
-#                                       ifelse(between(year, ctrl_year_lbound, ctrl_year_ubound) & 
-#                                                  time_til == -999 &
-#                                                  year %in% ctrl_years, "control", "invalid")), 
-#                            year = factor(year, level = min(year):max(year))
-#                     ) 
-#                 
-#             } else {
-#                 panelview_data = panelview_data %>% 
-#                     mutate(group_ind = 
-#                                ifelse(treat_start_year == input$t0_3 & year == input$t1_3, "treat", 
-#                                       ifelse(year == input$t1_3 & time_til==-999, "control", "invalid")), 
-#                            year = factor(year, level = min(year):max(year)))
-#             }
-#             
-#             panelview = ggplot(panelview_data,
-#                                aes(x = year, y = state, fill = group_ind), position = "identity")  +
-#                 geom_tile(colour="gray90", size=0.1, stat="identity") +
-#                 scale_fill_manual(values=obs_colors) +
-#                 geom_point(data = panelview_data, aes(x = year, y = state, shape = treat_status)) +
-#                 scale_shape_manual(values = c(19, 1)) +
-#                 labs(x = "Year", y = "State", title = "",
-#                      fill = "Observation Group",
-#                      shape = "Treatment Status"
-#                 ) + panelview_plot_tyle
-#         }
-#     panelview})
-
-
 }
 
 # Run the application 
