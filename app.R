@@ -32,7 +32,7 @@ library(shiny)
 library(sf)
 library(leaflet)
 library(shinyTree)
-source("../RMapShiny/util.R")
+source("util.R")
 
 #######################################################################
 ##    Global 
@@ -166,9 +166,9 @@ ui <- fluidPage(
                         sidebarPanel(
                           
                           h4("Estimand"), 
-                          radioButtons("estimand", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, >t_0, t_1}\\)" = "new1",
-                                         "ATE\\(_{t_0, \\infty, t_1}\\)" = "std1")),
+                          radioButtons("estimand1", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, >t_0, t_1}\\)" = "new",
+                                         "ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
                           withMathJax(),
                           helpText('Estimand can be ATE\\(_{t_0, >t_0, t_1}\\), which is the average causal 
                       effect the target population observed at time \\(t_1\\) from adopting the treatment 
@@ -208,8 +208,8 @@ ui <- fluidPage(
                       sidebarLayout(
                         sidebarPanel(
                           h4("Estimand"), 
-                          radioButtons("estimand", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std6")),
+                          radioButtons("estimand6", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
                           withMathJax(),
                           helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
                       effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
@@ -244,12 +244,12 @@ ui <- fluidPage(
              ), 
              
              
-             tabPanel("Implied Weights Population",
+             tabPanel("Implied Population",
                       sidebarLayout(
                         sidebarPanel(
                           h4("Estimand"), 
-                          radioButtons("estimand", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std2")),
+                          radioButtons("estimand2", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
                           withMathJax(),
                           helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
                       effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
@@ -265,37 +265,37 @@ ui <- fluidPage(
                           
                           # Horizontal line 
                           tags$hr(), 
-                          h4("Implied Weights Population of Units"), 
-                          checkboxInput("implied_unit", 'Show implied weighted Units.', FALSE), 
+                          h4("Implied Population of Units"), 
+                          checkboxInput("implied_unit", 'Show implied Units.', FALSE), 
                           
                           conditionalPanel(
                             condition = "input.implied_unit",
                             checkboxInput("implied_map", "If the Units are US States, show a US map.", FALSE), 
                             
-                            checkboxInput("implied_unit_by_time", 'Show implied weighted Units by Time.', FALSE), 
+                            checkboxInput("implied_unit_by_time", 'Show implied Units by Time.', FALSE), 
                             
                             conditionalPanel(
                               condition = "input.implied_map",
-                              checkboxInput("shade", 'Show differential implied weights with shade.', FALSE)
+                              checkboxInput("shade", 'Show differential implied with shade.', FALSE)
                             ), 
                             
                             conditionalPanel(
                               condition = "input.implied_unit_by_time",
-                              textInput("time_value", "Show implied weighted Units by the following Time point:", value = "1980")
+                              textInput("time_value", "Show implied Units by the following Time point:", value = "1980")
                             )
                             
                           ),
                           
                           # Horizontal line 
                           tags$hr(), 
-                          h4("Implied Weights Population of Time Periods"), 
-                          checkboxInput("implied_time", 'Show implied weighted Time periods.', FALSE), 
+                          h4("Implied Population of Time Periods"), 
+                          checkboxInput("implied_time", 'Show implied Time periods.', FALSE), 
                           conditionalPanel(
                             condition = "input.implied_time",
-                            checkboxInput("implied_time_by_unit", 'Show implied weighted Time periods by Unit.', FALSE), 
+                            checkboxInput("implied_time_by_unit", 'Show implied Time periods by Unit.', FALSE), 
                             conditionalPanel(
                               condition = "input.implied_time_by_unit",
-                              textInput("unit_value", "Show implied weighted Time periods by the following Unit:", value = "MA")
+                              textInput("unit_value", "Show implied Time periods by the following Unit:", value = "MA")
                             )
                           ),  
                           
@@ -327,8 +327,8 @@ ui <- fluidPage(
                       sidebarLayout(
                         sidebarPanel(
                           h4("Estimand"), 
-                          radioButtons("estimand", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std3")),
+                          radioButtons("estimand3", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
                           withMathJax(),
                           helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
                       effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
@@ -385,8 +385,8 @@ ui <- fluidPage(
                       sidebarLayout(
                         sidebarPanel(
                           h4("Estimand"), 
-                          radioButtons("estimand", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std5")),
+                          radioButtons("estimand5", "Choose the estimand:",
+                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
                           withMathJax(),
                           helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
                       effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
@@ -443,7 +443,7 @@ server = function(input, output){
     unit = data[, input$unit_ind_name]
     idx = 1:nrow(data)
     covar_names = str_split(input$covar_name, ",")[[1]]
-    covars_df = data[, covar_names]
+    covars_df = data.frame(data[, covar_names])
     col_names = paste("X", 1:ncol(covars_df), sep = "")
     colnames(covars_df) = col_names
     
@@ -539,7 +539,7 @@ server = function(input, output){
   
   output$panelview = renderPlot({
     
-    if(input$estimand == "new1") {
+    if(input$estimand1 == "new") {
       # define the valid control lead lag range
       time_til_ubound <- input$t1_1-input$t0_1
       time_til_lbound <- input$t1_1-max(panel_data()$Time)
@@ -1091,21 +1091,43 @@ server = function(input, output){
     MapPlot(by_time = input$implied_unit_by_time, time_value = as.numeric(input$time_value), shade=input$shade)
   })
   
+  lmw_output_download <- reactive({
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_2, t1 = input$t1_2, estimand = input$estimand2)
+    
+    covar_names = str_split(input$covar_name, ",")[[1]]
+    col_names = paste("X", 1:length(covar_names), sep = "")
+    data_output = data %>% 
+      dplyr::select(Unit, Time, Outcome, Treatment, any_of(col_names), lmw_weight, group_ind) 
+    colnames(data_output) = c(input$unit_ind_name, input$time_ind_name, 
+                              input$outcome_name, input$treat_name, covar_names, 
+                              "implied.weights", "obs.group")
+    data_output
+  })
   
+  inf_output_download <- reactive({
+    inf_output = inf_res()
+    user_df = input_data()
+    
+    covar_names = str_split(input$covar_name, ",")[[1]]
+    col_names = paste("X", 1:length(covar_names), sep = "")
+    inf_output = user_df %>% 
+      left_join(inf_output, by = "X") %>% 
+      dplyr::select(Unit, Time, Outcome, Treatment, any_of(col_names), inf, inf_scaled, est_change) 
+    colnames(inf_output) = c(input$unit_ind_name, input$time_ind_name, 
+                             input$outcome_name, input$treat_name, covar_names, 
+                             "SIC", "SIC.Scaled", "Est.Change") 
+    inf_output
+  })
   
   output$download_lmw <- downloadHandler(
-    
     filename = function() { paste("lmw-", Sys.Date(), ".csv", sep="") },
-    content = function(file) {
-      write.csv(
-        GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max), 
-        file)
-    }
+    content = function(file) { write.csv( lmw_output_download(), file) }
   )
   
   output$download_inf <- downloadHandler(
     filename = function() { paste("inf-", Sys.Date(), ".csv", sep="") },
-    content = function(file) { write.csv(inf_res(), file) }
+    content = function(file) { write.csv(inf_output_download(), file) }
   )
   
   

@@ -73,7 +73,8 @@ GetESS = function(data, bal_covariates, method = c("twfe", "experiment", "invari
   } else if (method == "delay") {
     # Setting 4: after invoking the delayed treatment onset assumption 
     df = data %>% 
-      filter(group_ind != "Dissipate") %>% 
+      filter(group_ind %in% c("IdealTreat", "IdealControl", "InvTreat", "InvControl", 
+                              "LimitAnticipate", "DelayOnset")) %>% 
       mutate(treat_ind = ifelse(group_ind %in% c("IdealTreat", "InvTreat"), 1, 0)) %>% 
       mutate(treat_ind = factor(treat_ind)) %>% 
       dplyr::select(X, treat_ind, any_of(bal_covariates_names), Outcome) %>% as.data.frame()
@@ -381,25 +382,14 @@ GetObsGroup = function(data, t0, t1, estimand = "std") {
     inv_treat_idx = setdiff(inv_treat_set$X, ideal_treat_set$X)
     inv_control_idx = setdiff(inv_control_set$X, ideal_control_set$X)
     
-    delay_set = data %>% 
-      filter(Unit %in% inv_treat_set$Unit) %>% 
-      filter(Treatment == 1 & time_til < t1-t0)
-    
     anticipate_set = data %>% 
-      filter(Unit %in% inv_treat_set$Unit) %>% 
       filter(Treatment == 0 & time_til < t1-t0)
     
+    delay_set = data %>% 
+      filter(Treatment == 1 & time_til < t1-t0)
+    
     dissipate_set = data %>% 
-      filter(Unit %in% inv_treat_set$Unit) %>% 
       filter(Treatment == 1 & time_til > t1-t0)
-    
-    treat_invalid_set3 = data %>% 
-      filter(!Unit %in% c(inv_treat_set$Unit, inv_control_set$Unit)) %>% 
-      filter(Treatment == 1)
-    
-    control_invalid_set3 = data %>% 
-      filter(!Unit %in% c(inv_treat_set$Unit, inv_control_set$Unit)) %>% 
-      filter(Treatment == 0)
     
     # Create one column indicating the group for each observation 
     data_obs_group = data %>% 
@@ -409,13 +399,10 @@ GetObsGroup = function(data, t0, t1, estimand = "std") {
                                    X %in% inv_control_idx ~ "InvControl", 
                                    X %in% delay_set$X ~ "DelayOnset",
                                    X %in% anticipate_set$X ~ "LimitAnticipate",
-                                   X %in% dissipate_set$X ~ "Dissipate", 
-                                   X %in% treat_invalid_set3$X ~ "InvalidTreat", 
-                                   X %in% control_invalid_set3$X ~ "InvalidControl")) %>% 
+                                   X %in% dissipate_set$X ~ "Dissipate")) %>% 
       mutate(group_ind = factor(group_ind, levels = c("IdealTreat", "IdealControl", 
                                                       "InvTreat", "InvControl",
-                                                      "LimitAnticipate", "DelayOnset", "Dissipate", 
-                                                      "InvalidTreat", "InvalidControl")))
+                                                      "LimitAnticipate", "DelayOnset", "Dissipate")))
   } else if (estimand == "new") { 
     
     # define the valid control lead lag range
@@ -441,14 +428,6 @@ GetObsGroup = function(data, t0, t1, estimand = "std") {
     dissipate_set = data %>% 
       filter(Treatment == 1 & time_til > max(time_til_lbound:time_til_ubound))
     
-    treat_invalid_set3 = data %>% 
-      filter(!X %in% c(inv_treat_set$X, inv_control_set$X, anticipate_set$X, dissipate_set$X)) %>% 
-      filter(Treatment == 1)
-    
-    control_invalid_set3 = data %>% 
-      filter(!X %in% c(inv_treat_set$X, inv_control_set$X, anticipate_set$X, dissipate_set$X)) %>% 
-      filter(Treatment == 0)
-    
     # Create one column indicating the group for each observation 
     data_obs_group = data %>% 
       mutate(group_ind = case_when(X %in% ideal_treat_idx ~ "IdealTreat",
@@ -456,13 +435,10 @@ GetObsGroup = function(data, t0, t1, estimand = "std") {
                                    X %in% inv_treat_idx ~ "InvTreat", 
                                    X %in% inv_control_idx ~ "InvControl", 
                                    X %in% anticipate_set$X ~ "LimitAnticipate",
-                                   X %in% dissipate_set$X ~ "Dissipate", 
-                                   X %in% treat_invalid_set3$X ~ "InvalidTreat", 
-                                   X %in% control_invalid_set3$X ~ "InvalidControl")) %>% 
+                                   X %in% dissipate_set$X ~ "Dissipate")) %>% 
       mutate(group_ind = factor(group_ind, levels = c("IdealTreat", "IdealControl", 
                                                       "InvTreat", "InvControl",
-                                                      "LimitAnticipate", "Dissipate", 
-                                                      "InvalidTreat", "InvalidControl")))
+                                                      "LimitAnticipate", "Dissipate")))
     
   } else {
     stop("Estimand to be specified as `std` or `new`. ")
