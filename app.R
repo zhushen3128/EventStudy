@@ -298,6 +298,12 @@ ui <- fluidPage(
                               textInput("unit_value", "Show implied weighted Time periods by the following Unit:", value = "MA")
                             )
                           ),  
+                          
+                          # Horizontal line 
+                          tags$hr(), 
+                          h4("Download Dataset with Implied Weights"), 
+                          downloadButton("download_lmw", "Download")
+                          
                         ), 
                         mainPanel(
                           conditionalPanel(
@@ -400,7 +406,12 @@ ui <- fluidPage(
                           selectInput("influence_metric", "What influence metric to show:",
                                       c("Change of point estimate due to each observation." = "est_change", 
                                         "Exact SIC of each observation." = "sic",
-                                        "Scaled SIC of each observation." = "sic_scaled"))
+                                        "Scaled SIC of each observation." = "sic_scaled")), 
+                          
+                          # Horizontal line 
+                          tags$hr(), 
+                          h4("Download Table with Influence of Each Observation"), 
+                          downloadButton("download_inf", "Download")
                         ), 
                         mainPanel(
                           plotOutput("infuence_plot_panel", height = "600px", width = "1000px"),
@@ -1079,6 +1090,25 @@ server = function(input, output){
     }
     MapPlot(by_time = input$implied_unit_by_time, time_value = as.numeric(input$time_value), shade=input$shade)
   })
+  
+  
+  
+  output$download_lmw <- downloadHandler(
+    
+    filename = function() { paste("lmw-", Sys.Date(), ".csv", sep="") },
+    content = function(file) {
+      write.csv(
+        GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max), 
+        file)
+    }
+  )
+  
+  output$download_inf <- downloadHandler(
+    filename = function() { paste("inf-", Sys.Date(), ".csv", sep="") },
+    content = function(file) { write.csv(inf_res(), file) }
+  )
+  
+  
 }
 
 # Run the application 
