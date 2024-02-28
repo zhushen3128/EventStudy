@@ -339,12 +339,11 @@ ui <- fluidPage(
                           # Horizontal line 
                           tags$hr(), 
                           checkboxInput("twfe", 'Compute ESS for TWFE approach.', TRUE), 
-                          checkboxInput("experiment", 'Compute ESS for balancing Approach under Hypothetical Experiment.', FALSE), 
-                          checkboxInput("invariance", 'Compute ESS for balancing Approach if further invoke Invariance to Time Shifts assumption.', FALSE), 
-                          checkboxInput("anticipate", 'Compute ESS for balancing Approach if further invoke Limited Treatment Anticipation assumption.', FALSE), 
-                          # SZ 2024/02/20: Somehow delay onset table does not render, need to further debug. 
-                          # checkboxInput("delay", 'Compute ESS for balancing Approach if further invoke Delayed Treatment Onset assumption.', FALSE), 
-                          checkboxInput("dissipate", 'Compute ESS for balancing Approach using all observations.', FALSE)
+                          checkboxInput("balance_experiment", 'Compute ESS for balancing Approach under Hypothetical Experiment.', FALSE), 
+                          checkboxInput("balance_invariance", 'Compute ESS for balancing Approach if further invoke Invariance to Time Shifts assumption.', FALSE), 
+                          checkboxInput("balance_anticipate", 'Compute ESS for balancing Approach if further invoke Limited Treatment Anticipation assumption.', FALSE), 
+                          checkboxInput("balance_delay", 'Compute ESS for balancing Approach if further invoke Delayed Treatment Onset assumption.', FALSE), 
+                          checkboxInput("balance_dissipate", 'Compute ESS for balancing Approach using all observations.', FALSE)
                           
                         ),
                         mainPanel(
@@ -354,19 +353,23 @@ ui <- fluidPage(
                             tableOutput("twfe_ess")
                           ),
                           conditionalPanel(
-                            condition = "input.experiment",
+                            condition = "input.balance_experiment",
                             tableOutput("balance_experiment_ess")
                           ),
                           conditionalPanel(
-                            condition = "input.invariance",
+                            condition = "input.balance_invariance",
                             tableOutput("balance_invariance_ess")
                           ),
                           conditionalPanel(
-                            condition = "input.anticipate",
+                            condition = "input.balance_anticipate",
                             tableOutput("balance_anticipate_ess")
                           ), 
                           conditionalPanel(
-                            condition = "input.dissipate",
+                            condition = "input.balance_delay",
+                            tableOutput("balance_delay_ess")
+                          ),  
+                          conditionalPanel(
+                            condition = "input.balance_dissipate",
                             tableOutput("balance_dissipate_ess")
                           ))
                       )
