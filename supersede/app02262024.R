@@ -1,4 +1,4 @@
-
+#
 # This is a Shiny web application. You can run the application by clicking
 # the 'Run App' button above.
 #
@@ -32,7 +32,9 @@ library(shiny)
 library(sf)
 library(leaflet)
 library(shinyTree)
-source("../RMapShiny/util.R")
+
+source("plot_func.R")
+source("util.R")
 
 #######################################################################
 ##    Global 
@@ -83,25 +85,68 @@ panelview_plot_tyle <-
 guides(fill = guide_legend(order = 1), 
        shape = guide_legend(order = 2))
 
-implied_plot_tyle <- 
-  theme(plot.title = element_text(family = "Times", size = rel(2), hjust = 0.5),
-        text = element_text(family = "Times"),
-        panel.background = element_rect(colour = NA),
-        plot.background = element_rect(colour = "white"),
-        axis.title = element_blank(),
-        axis.title.y = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text = element_blank(),
-        axis.line = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        legend.key = element_rect(colour = NA),
-        legend.position = "bottom",
-        legend.margin = unit(0, "cm"),
-        plot.margin=unit(c(1,0,0,0),unit = "mm"),
-        strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-        strip.text = element_text(face="bold", family = "Times"))
+#######################################################################
+##    Data
+#######################################################################
+
+# read and preprocess data 
+dat <- read.csv("../bacon_example.csv")
+
+# define the entire follow-up period 
+lead_min = 15 
+lag_max = 20
+
+data_study <- dat %>% 
+  # for each state, contruct the baseline covariates 
+  group_by(stfips) %>%
+  dplyr::summarise(
+    pcinc_baseline = pcinc[which.min(year)], 
+    asmrh_baseline = asmrh[which.min(year)], 
+    cases_baseline = cases[which.min(year)], 
+    # construct column for treatment start year 
+    treat_start_year = ifelse(sum(treat) == 0 & post[year == 1964] == 0, 9999, year[time_to_treat == 0])
+  ) %>% ungroup() %>% 
+  right_join(dat, by = "stfips") %>% 
+  # filter out states with implemented reforms before 1964
+  filter(treat_start_year != 1964) %>% 
+  dplyr::rename(time_til = time_to_treat) %>%  
+  dplyr::mutate(
+    # replace with the state names 
+    state = cdlTools::fips(stfips, to = "Abbreviation"), 
+    # if time_til = -999 for never treated units 
+    # (!) 01232024 SZ: this is right but we cannot find solutions
+    time_til = replace(time_til, (treat==0 & time_til==0 & post==0), -999), 
+    # construct column for treatment status 
+    treat_status = ifelse(treat_start_year <= year, 1, 0), 
+    # construct lead and lag columns (in the range of our defined horizon)
+    lead = ifelse((time_til < 0) & (time_til >= -1*lead_min), -1*time_til, "lag"), 
+    lag = ifelse((time_til >= 0) & (time_til <= lag_max), time_til, "lead"), 
+    # one column correspond to never treated 
+    lag_inf = as.factor(ifelse(time_til == -999, 1, 0)), 
+    X = row_number()) 
+
+data_study_augment = data_study %>% 
+  fastDummies::dummy_cols(select_columns = c("state", "year", "lead", "lag")) %>% 
+  dplyr::select(-c("lead_lag", "lag_lead"))  
+
+# define names of variables we would use 
+baseline_covariates <- c(
+  "pcinc_baseline", "asmrh_baseline", "cases_baseline"
+)
+
+state_covariates <- c(
+  paste("state", unique(data_study$state), sep = "_")
+)
+
+year_covariates <- c(
+  paste("year", unique(data_study$year), sep = "_")
+)
+
+lead_lag_covariates <- c(
+  paste("lead", seq(lead_min,1), sep = "_"), 
+  paste("lag", seq(0,lag_max), sep = "_"), 
+  "lag_inf"
+)
 
 #######################################################################
 ##    UI
@@ -237,9 +282,9 @@ ui <- fluidPage(
                           numericInput("l_max", "What is the treatment horizon: maximum lag?", value = 20)
                         ), 
                         mainPanel(
-                          plotOutput("twfe_event_study_plot", height = "600px", width = "900px"), 
-                          plotOutput("twfe_panelview", height = "600px", width = "900px")
-                        )
+                                  plotOutput("twfe_event_study_plot", height = "600px", width = "900px"), 
+                                  plotOutput("twfe_panelview", height = "600px", width = "900px")
+                          )
                       )
              ), 
              
@@ -265,55 +310,23 @@ ui <- fluidPage(
                           
                           # Horizontal line 
                           tags$hr(), 
-                          h4("Implied Weights Population of Units"), 
-                          checkboxInput("implied_unit", 'Show implied weighted Units.', FALSE), 
-                          
+                          h4("Implied Weights Population"), 
+                          checkboxInput("implied_population", 
+                                        'Show implied weighted states', TRUE), 
                           conditionalPanel(
-                            condition = "input.implied_unit",
-                            checkboxInput("implied_map", "If the Units are US States, show a US map.", FALSE), 
-                            
-                            checkboxInput("implied_unit_by_time", 'Show implied weighted Units by Time.', FALSE), 
-                            
+                            condition = "input.implied_population",
+                            checkboxInput("implied_population_by_time", 
+                                          'Show implied weighted states by year', FALSE), 
                             conditionalPanel(
-                              condition = "input.implied_map",
-                              checkboxInput("shade", 'Show differential implied weights with shade.', FALSE)
+                              condition = "input.implied_population_by_year",
+                              numericInput("year_value", 
+                                           "Show implied weighted population by the following time point:", value = 1980)
                             ), 
-                            
-                            conditionalPanel(
-                              condition = "input.implied_unit_by_time",
-                              textInput("time_value", "Show implied weighted Units by the following Time point:", value = "1980")
-                            )
-                            
-                          ),
-                          
-                          # Horizontal line 
-                          tags$hr(), 
-                          h4("Implied Weights Population of Time Periods"), 
-                          checkboxInput("implied_time", 'Show implied weighted Time periods.', FALSE), 
-                          conditionalPanel(
-                            condition = "input.implied_time",
-                            checkboxInput("implied_time_by_unit", 'Show implied weighted Time periods by Unit.', FALSE), 
-                            conditionalPanel(
-                              condition = "input.implied_time_by_unit",
-                              textInput("unit_value", "Show implied weighted Time periods by the following Unit:", value = "MA")
-                            )
-                          ),  
-                        ), 
-                        mainPanel(
-                          conditionalPanel(
-                            condition =  "input.implied_unit",
-                            plotlyOutput("implied_unit_plot", height = "600px", width = "1000px")
-                          ), 
-                          conditionalPanel(
-                            condition = "input.implied_map",
-                            plotOutput("implied_map_plot", height = "600px", width = "1000px")
-                          ), 
-                          conditionalPanel(
-                            condition = "input.implied_time",
-                            plotlyOutput("implied_time_plot", height = "600px", width = "1000px")
+                            checkboxInput("shade", 'Show differential implied weights with shade.', FALSE), 
+                            checkboxInput("implied_map", "If the Units are US States, show a map of implied weighted population.", FALSE)
                           )
-                        )
-                        
+                        ), 
+                        mainPanel(plotOutput("implied", height = "600px", width = "900px"))
                       )
              ),
              
@@ -348,7 +361,7 @@ ui <- fluidPage(
                           
                         ),
                         mainPanel(
-                          plotOutput("ess_plot", height = "600px", width = "1000px"),
+                          plotOutput("ess_plot"), 
                           conditionalPanel(
                             condition = "input.twfe",
                             tableOutput("twfe_ess")
@@ -400,8 +413,8 @@ ui <- fluidPage(
                                         "Scaled SIC of each observation." = "sic_scaled"))
                         ), 
                         mainPanel(
-                          plotOutput("infuence_plot_panel", height = "600px", width = "1000px"),
-                          plotlyOutput("infuence_plot", height = "600px", width = "1000px")
+                          plotOutput("infuence_plot_panel"), 
+                          plotlyOutput("infuence_plot")
                         )
                       )
              )
@@ -480,9 +493,7 @@ server = function(input, output){
   
   # reactive data frame of the study data with calculated sample influences; will be used for SIC plotting 
   inf_res = reactive({ 
-    data = GetImpliedWeights(input_data_augment(), t0 = input$t0_5, t1 = input$t1_5, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data, t0 = input$t0_5, t1 = input$t1_5, estimand = "std")
-    GetInfluence(data = data, t0 = input$t0_5, t1 = input$t1_5, l_min = input$l_min, l_max = input$l_max) 
+    GetInfluence(estimand = "std", t0 = input$t0_5, t1 = input$t1_5) 
   })
   
   # Panel plotting 
@@ -678,6 +689,7 @@ server = function(input, output){
   
   
   output$twfe_event_study_plot = renderPlot({
+    
     event_study_formula <- as.formula(
       paste("Outcome ~",
             paste(
@@ -718,10 +730,10 @@ server = function(input, output){
             axis.text.y = element_text(face="bold", size = 10),
             plot.title = element_text(size=15, hjust = 0.5, face="bold", margin = margin(8, 0, 8, 0)))
     p
-  }, height = 600, width = 880)
+    }, height = 600, width = 880)
   
   output$twfe_panelview = renderPlot({
-    panelview_data = panel_data() %>% 
+    panelview_data = panel_data %>% 
       mutate(group_ind = ifelse(time_til == input$t1_6-input$t0_6, "Treat", "Control"), 
              Time = factor(Time),
              group_ind = factor(group_ind, levels = c("Treat", "Control", "Invalid")))
@@ -739,26 +751,15 @@ server = function(input, output){
   }, height = 600, width = 880)
   
   output$ess_plot = renderPlot({
-    panelview_data = GetObsGroup(panel_data(), t0 = input$t0_4, t1 = input$t1_4, estimand = "std") 
-    panelview_data = panelview_data %>% 
-      mutate(Time = factor(Time))
-    
-    panelview = ggplot(panelview_data,
-                       aes(x = Time, y = Unit), position = "identity")  +
-      geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") +
-      scale_fill_manual(values=ess_obs_colors) +
-      geom_point(data = panelview_data, aes(x = Time, y = Unit, shape = Treatment)) +
-      scale_shape_manual(values = c(19, 1)) +
-      labs(x = "Time", y = "Unit", title = "", fill = "Observation Group", shape = "Treatment Status") +
-      panelview_plot_tyle
-    panelview
-  }, height = 600, width = 880)
+    if (input$estimand_4 == "std4") {
+      PlotESS(estimand = "std", t0 = input$t0_4, t1 = input$t1_4)
+    } 
+  })
   
   output$twfe_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
-    covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, bal_covariates = covar_names, method = "twfe")
+    if (input$estimand_4 == "std4") {
+      GetESS(estimand = "std", t0 = input$t0_4, t1 = input$t1_4, method = "twfe")
+    } 
   }, 
   striped = TRUE,
   spacing = "l",
@@ -769,10 +770,9 @@ server = function(input, output){
   )
   
   output$balance_experiment_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
-    covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, bal_covariates = covar_names, method = "experiment")
+    if (input$estimand_4 == "std4") {
+      GetESS(estimand = "std", t0 = input$t0_4, t1 = input$t1_4, method = "experiment")
+    } 
   }, 
   striped = TRUE,
   spacing = "l",
@@ -783,10 +783,9 @@ server = function(input, output){
   )
   
   output$balance_invariance_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
-    covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, bal_covariates = covar_names, method = "invariance")
+    if (input$estimand_4 == "std4") {
+      GetESS(estimand = "std", t0 = input$t0_4, t1 = input$t1_4, method = "invariance")
+    } 
   }, 
   striped = TRUE,
   spacing = "l",
@@ -797,10 +796,9 @@ server = function(input, output){
   )
   
   output$balance_anticipate_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
-    covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, bal_covariates = covar_names, method = "anticipate")
+    if (input$estimand_4 == "std4") {
+      GetESS(estimand = "std", t0 = input$t0_4, t1 = input$t1_4, method = "anticipate")
+    } 
   }, 
   striped = TRUE,
   spacing = "l",
@@ -811,10 +809,9 @@ server = function(input, output){
   )
   
   output$balance_delay_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
-    covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, bal_covariates = covar_names, method = "delay")
+    if (input$estimand_4 == "std4") {
+      GetESS(estimand = "std", t0 = input$t0_4, t1 = input$t1_4, method = "delay")
+    } 
   }, 
   striped = TRUE,
   spacing = "l",
@@ -825,10 +822,9 @@ server = function(input, output){
   )
   
   output$balance_dissipate_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
-    covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, bal_covariates = covar_names, method = "dissipate")
+    if (input$estimand_4 == "std4") {
+      GetESS(estimand = "std", t0 = input$t0_4, t1 = input$t1_4, method = "dissipate")
+    } 
   }, 
   striped = TRUE,
   spacing = "l",
@@ -839,112 +835,67 @@ server = function(input, output){
   )
   
   output$infuence_plot_panel = renderPlot({
-    panelview_data = GetObsGroup(panel_data(), t0 = input$t0_5, t1 = input$t1_5, estimand = "std") 
-    panelview_data = panelview_data %>% 
-      mutate(Time = factor(Time))
-    
-    panelview = ggplot(panelview_data,
-                       aes(x = Time, y = Unit), position = "identity")  +
-      geom_tile(aes(fill = group_ind), colour="gray90", size=0.1, stat="identity") +
-      scale_fill_manual(values=ess_obs_colors) +
-      geom_point(data = panelview_data, aes(x = Time, y = Unit, shape = Treatment)) +
-      scale_shape_manual(values = c(19, 1)) +
-      labs(x = "Time", y = "Unit", title = "", fill = "Observation Group", shape = "Treatment Status") +
-      panelview_plot_tyle
-    panelview
-  }, height = 600, width = 880)
+    PlotESS(estimand = "std", t0 = input$t0_5, t1 = input$t1_5) 
+  })
   
   output$infuence_plot = renderPlotly({
-    
-    data = GetImpliedWeights(input_data_augment(), t0 = input$t0_5, t1 = input$t1_5, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data, t0 = input$t0_5, t1 = input$t1_5, estimand = "std")
-    
     if (input$influence_metric == "sic") {
-      change_plt = PlotInfluence(data = data, inf_all = inf_res(), input$t0_5, input$t1_5, metric = "sic")
-      ggplotly(change_plt, tooltip = c("group_ind", "Unit", "Time", "TreatStartTime","Outcome","SIC"))
+      change_plt = PlotInfluence(inf_res(), estimand = "std", input$t0_5, input$t1_5, metric = "sic")
+      ggplotly(change_plt, tooltip = c("group", "state", "year", "treat_start_year","female_suicide","sic"))
     } else if (input$influence_metric == "sic_scaled") {
-      change_plt = PlotInfluence(data = data, inf_all = inf_res(), input$t0_5, input$t1_5, metric = "sic_scaled")
-      ggplotly(change_plt, tooltip = c("group_ind", "Unit", "Time", "TreatStartTime","Outcome","SIC.Scaled"))
+      change_plt = PlotInfluence(inf_res(), estimand = "std", input$t0_5, input$t1_5, metric = "sic_scaled")
+      ggplotly(change_plt, tooltip = c("group", "state", "year", "treat_start_year","female_suicide","sic_scaled"))
     } else {
-      change_plt = PlotInfluence(data = data, inf_all = inf_res(), input$t0_5, input$t1_5, metric = "est_change")
-      ggplotly(change_plt, tooltip = c("group_ind", "Unit", "Time", "TreatStartTime","Outcome","Est.Change"))
+      change_plt = PlotInfluence(inf_res(), estimand = "std", input$t0_5, input$t1_5, metric = "est_change")
+      ggplotly(change_plt, tooltip = c("group", "state", "year", "treat_start_year","female_suicide","est_change"))
+      
     }
   })
   
-  output$implied_unit_plot = renderPlotly({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max)
+  output$implied = renderPlot({
     
-    if (input$implied_unit_by_time) {
-      implied_unit_plot = data_augment_weight %>% 
-        dplyr::select(X, Unit, Time, Treatment, lmw_weight, time_til, treatment_component) %>%
-        dplyr::filter(Time == as.numeric(input$time_value)) %>% 
-        group_by(Unit, treatment_component) %>%
-        summarise(Proportion = round(mean(lmw_weight), 4)) %>% ungroup() %>%
-        ggplot(aes(x = Unit, xend = Unit, y = 0, yend = Proportion)) +
-        geom_segment(aes(col = treatment_component), linetype = "solid", linewidth = 0.3) + 
-        scale_color_manual(values=c("1" = "#3293e3", "0" = "#69b334")) +
-        labs(x = "Unit", y = "Implied Proportion", title = paste0("Implied Unit Proportion of Time ", input$time_value)) +
-        # geom_text(aes(x = Unit, y = Proportion, label = Proportion), size = 5, vjust = 0) +
-        scale_x_discrete(breaks=unique(data_augment_weight$Unit)) + 
-        theme_bw() + 
-        theme(plot.title = element_text(size = 15, face = "bold"), 
-              axis.title = element_text(size = 12), 
-              axis.text = element_text(size = 10, face = "bold"))
+    ################ Implied Weights ################ 
+    # define the implied weights formula
+    event_study_formula <- as.formula(
+      paste("asmrs ~ ",
+            paste(state_covariates,collapse = " + "), " + ",
+            paste(year_covariates,collapse = " + "), " + ",
+            paste(lead_lag_covariates[-length(lead_lag_covariates)],collapse = " + ")
+      )
+    )
+    
+    all_covariates_df <- data_study_augment %>%
+      dplyr::select(c(year_covariates,state_covariates,lead_lag_covariates))
+    
+    if (input$t1_2 >= input$t0_2) {
+      drop <- c(paste0("lag",input$t1_2-input$t0_2))
+      treat = paste0("lag_",input$t1_2-input$t0_2)
     } else {
-      implied_unit_plot = data_augment_weight %>% 
-        dplyr::select(X, Unit, Time, Treatment, lmw_weight, time_til, treatment_component) %>%
-        group_by(Unit) %>%
-        summarise(Proportion = round(mean(lmw_weight), 4)) %>% ungroup() %>%
-        ggplot(aes(x = Unit, xend = Unit, y = 0, yend = Proportion)) +
-        geom_segment(linetype = "solid", linewidth = 0.3) +  
-        labs(x = "Unit", y = "Implied Proportion", title = "Implied Unit Proportion") +
-        theme_bw() + 
-        theme(plot.title = element_text(size = 15, face = "bold"), 
-              axis.title = element_text(size = 12), 
-              axis.text = element_text(size = 10, face = "bold"))
+      drop <- c(paste0("lead",input$t0_2-input$t1_2))
+      treat = paste0("lead_",input$t0_2-input$t1_2)
     }
-    ggplotly(implied_unit_plot, tooltip = c("Unit", "Proportion"), height = 600, width = 900) 
-  })
-  
-  
-  output$implied_time_plot = renderPlotly({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max)
-    if (input$implied_time_by_unit) {
-      implied_time_plot = data_augment_weight %>% 
-        dplyr::select(X, Unit, Time, Treatment, lmw_weight, time_til, treatment_component) %>%
-        dplyr::filter(Unit == input$unit_value) %>% 
-        group_by(Time, treatment_component) %>%
-        summarise(Proportion = round(mean(lmw_weight), 4)) %>% ungroup() %>%
-        ggplot(aes(x = Time, xend = Time, y = 0, yend = Proportion)) +
-        geom_segment(aes(col = treatment_component), linetype = "solid", linewidth = 0.3) + 
-        scale_color_manual(values=c("1" = "#3293e3", "0" = "#69b334")) +
-        labs(x = "Time", y = "Implied Proportion", title = paste0("Implied Time Proportion of Unit ", input$unit_value)) +
-        theme_bw() + 
-        theme(plot.title = element_text(size = 15, face = "bold"), 
-              axis.title = element_text(size = 12), 
-              axis.text = element_text(size = 10, face = "bold"))
-    } else {
-      implied_time_plot = data_augment_weight %>% 
-        dplyr::select(X, Unit, Time, Treatment, lmw_weight, time_til, treatment_component) %>%
-        group_by(Time) %>%
-        summarise(Proportion = round(mean(lmw_weight), 3)) %>% ungroup() %>%
-        ggplot(aes(x = Time, xend = Time, y = 0, yend = Proportion)) +
-        geom_segment(linetype = "solid", linewidth = 0.3) +  
-        labs(x = "Time", y = "Implied Proportion", title = "Implied Time Proportion") +
-        theme_bw() + 
-        theme(plot.title = element_text(size = 15, face = "bold"), 
-              axis.title = element_text(size = 12), 
-              axis.text = element_text(size = 10, face = "bold"))
-    }
-    ggplotly(implied_time_plot, tooltip = c("Time", "Proportion"), height = 600, width = 900) 
-  })
-  
-  output$implied_map_plot = renderPlot({
+    all_covariates_df = all_covariates_df[,!(names(all_covariates_df) %in% drop)]
+    all_covariates_df <- apply(all_covariates_df, 2, as.numeric)
+    
+    lmw_att_out_original = lmw::lmw(event_study_formula,
+                                    data = data_study_augment,
+                                    estimand = "ATT", method = "URI",
+                                    treat = treat)
+    weight_original = lmw_att_out_original$weights
+    act_index = data_study_augment$X[data_study_augment$time_til == input$t1_2-input$t0_2]
+    non_index = data_study_augment$X[data_study_augment$time_til != input$t1_2-input$t0_2]
+    data_study_augment = data_study_augment %>%
+      # 2024/02/15: adapt to the changes of the lmw package
+      mutate(lmw_weight = ifelse(X %in% act_index, weight_original/length(act_index), weight_original/length(non_index)), 
+             treat_group = ifelse(X %in% act_index, 1, 0))
+    
     ################ Map Data ################
     # Map state names and state abbreviations
     state_names = str_to_lower(state.name)
     state_abbr = state.abb
-    state_info = data.frame(cbind(state = state_abbr, state_names = state_names)) %>%
+    state_info = data.frame(cbind(state = state_abbr,
+                                  state_names = state_names)) %>%
+      # we do not include AK and HI
       filter(!state %in% c("AK", "HI"))
     
     # Longitude and Latitude of state center (for plotting)
@@ -967,98 +918,88 @@ server = function(input, output){
     
     ################ Implied Weighted States ################
     # Join the two datasets: map data and the value (lmw weight) for each observation
+    map_plot_data = state_data %>%
+      left_join(data_study_augment, by="state")
     
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max)
-    map_plot_data = state_data %>% 
-      left_join(data_augment_weight, by = c("state" = "Unit")) %>%
-      dplyr::rename(Unit = state)
-    
-    MapPlot = function(by_time, time_value, shade) {
-      if (by_time) {
+    MapPlot = function(year_value, shade=TRUE) {
+      
+      if (!is.null(year_value)) {
+        
         map_center_plot_data = map_plot_data %>% 
-          filter(Time == time_value) %>% 
-          dplyr::select(Time, Unit, group, c_long, c_lat, Treatment) %>% 
-          mutate(Treatment = factor(Treatment, level = c(0, 1))) %>% 
+          filter(year == year_value) %>% 
+          dplyr::select(year, state, group, c_long, c_lat, treat_status) %>% 
+          mutate(treat_status = factor(treat_status, level = c(0, 1))) %>% 
           distinct()
         
         map_year_plot_data = map_plot_data %>%
-          filter(Time == time_value) %>%
-          dplyr::select(X, Time, Unit, long, lat, group, c_long, c_lat,
-                        lmw_weight, time_til, Treatment, treatment_component) %>%
-          mutate(Treatment = factor(Treatment, level = c(0, 1)))
+          filter(year == year_value) %>%
+          dplyr::select(X, year, state, long, lat, group, c_long, c_lat,
+                        lmw_weight, time_til, treat_status, treat_group) %>%
+          mutate(treat_status = factor(treat_status, level = c(0, 1)))
         
         # Plot
         if (shade) {
           map_plot =
             ggplot() +
-            geom_polygon(data=map_year_plot_data[map_year_plot_data$treatment_component == 1, ],
+            geom_polygon(data=map_year_plot_data[map_year_plot_data$treat_group == 1, ],
                          aes(x=long, y=lat, group=group, fill=lmw_weight), color="black", size = 0.2) +
             scale_fill_continuous(name= paste0("Treated observation implied weight"),
                                   low = "#9dc4e4", high = "#3787c8",
                                   limits = c(
-                                    min(map_plot_data[map_plot_data$treatment_component == 1, "lmw_weight"]),
-                                    max(map_plot_data[map_plot_data$treatment_component == 1, "lmw_weight"])),
+                                    min(map_plot_data[map_plot_data$treat_group == 1, "lmw_weight"]),
+                                    max(map_plot_data[map_plot_data$treat_group == 1, "lmw_weight"])),
                                   na.value = "grey50") +
             new_scale_fill() +
-            geom_polygon(data=map_year_plot_data[map_year_plot_data$treatment_component == 0,],
+            geom_polygon(data=map_year_plot_data[map_year_plot_data$treat_group == 0,],
                          aes(x=long, y=lat, group=group, fill=lmw_weight), color="black", size = 0.2) +
             scale_fill_gradient2(name= paste0("Control observation implied weight"),
                                  low = "darkgreen", mid = "white", high = "darkgreen",
                                  limits = c(
-                                   min(map_plot_data[map_plot_data$treatment_component == 0, "lmw_weight"]),
-                                   max(map_plot_data[map_plot_data$treatment_component == 0, "lmw_weight"])),
+                                   min(map_plot_data[map_plot_data$treat_group == 0, "lmw_weight"]),
+                                   max(map_plot_data[map_plot_data$treat_group == 0, "lmw_weight"])),
                                  na.value = "grey50") +
-            geom_point(data = map_center_plot_data[map_center_plot_data$Treatment == 1, ],
+            geom_point(data = map_center_plot_data[map_center_plot_data$treat_status == 1, ],
                        aes(x = c_long, y = c_lat), size = 10, shape = 19) +
-            geom_text(data = map_center_plot_data[map_center_plot_data$Treatment == 1, ],
-                      aes(c_long, c_lat, label = Unit), color = "white", size = 5) +
-            geom_text(data = map_center_plot_data[map_center_plot_data$Treatment == 0, ],
-                      aes(c_long, c_lat, label = Unit), color = "black", size = 5) +
-            labs(title = paste0("Time ", time_value)) +
+            geom_text(data = map_center_plot_data[map_center_plot_data$treat_status == 1, ],
+                      aes(c_long, c_lat, label = state), color = "white", size = 5) +
+            geom_text(data = map_center_plot_data[map_center_plot_data$treat_status == 0, ],
+                      aes(c_long, c_lat, label = state), color = "black", size = 5) +
+            labs(title = paste0("Year ", year_value)) +
             ggthemes::theme_map() + implied_plot_tyle
         } else {
           map_plot =
             ggplot() +
-            geom_polygon(data=map_year_plot_data[map_year_plot_data$treatment_component == 1, ],
+            geom_polygon(data=map_year_plot_data[map_year_plot_data$treat_group == 1, ],
                          aes(x=long, y=lat, group=group), fill = "#9dc4e4", color="black", size = 0.2) +
             new_scale_fill() +
-            geom_polygon(data=map_year_plot_data[map_year_plot_data$treatment_component == 0,],
+            geom_polygon(data=map_year_plot_data[map_year_plot_data$treat_group == 0,],
                          aes(x=long, y=lat, group=group), fill="#c6e0b4", color="black", size = 0.2) +
-            geom_point(data = map_center_plot_data[map_center_plot_data$Treatment == 1, ],
+            geom_point(data = map_center_plot_data[map_center_plot_data$treat_status == 1, ],
                        aes(x = c_long, y = c_lat), size = 10, shape = 19) +
-            geom_text(data = map_center_plot_data[map_center_plot_data$Treatment == 1, ],
-                      aes(c_long, c_lat, label = Unit), color = "white", size = 5) +
-            geom_text(data = map_center_plot_data[map_center_plot_data$Treatment == 0, ],
-                      aes(c_long, c_lat, label = Unit), color = "black", size = 5) +
-            labs(title = paste0("Time ", time_value)) +
+            geom_text(data = map_center_plot_data[map_center_plot_data$treat_status == 1, ],
+                      aes(c_long, c_lat, label = state), color = "white", size = 5) +
+            geom_text(data = map_center_plot_data[map_center_plot_data$treat_status == 0, ],
+                      aes(c_long, c_lat, label = state), color = "black", size = 5) +
+            labs(title = paste0("Year ", year_value)) +
             ggthemes::theme_map() + implied_plot_tyle
+          
         }
+        
       } else {
-        
-        map_center_plot_data = map_plot_data %>% 
-          dplyr::select(Time, Unit, group, c_long, c_lat, Treatment) %>% 
-          mutate(Treatment = factor(Treatment, level = c(0, 1))) %>% 
-          distinct()
-        
-        map_year_plot_data = map_plot_data %>%
-          dplyr::select(X, Time, Unit, long, lat, group, c_long, c_lat,
-                        lmw_weight, time_til, Treatment, treatment_component) %>%
-          mutate(Treatment = factor(Treatment, level = c(0, 1)))
-        
         if (shade) {
           map_plot = map_plot_data %>%
             na.omit() %>%
-            dplyr::select(X, Time, Unit, long, lat, group, c_long, c_lat,
-                          lmw_weight, time_til, Treatment, treatment_component) %>%
-            filter(treatment_component == 1) %>%
-            group_by(Unit) %>%
+            dplyr::select(X, year, state, long, lat, group, c_long, c_lat,
+                          lmw_weight, time_til, treat_status, treat_group) %>%
+            filter(treat_group == 1) %>%
+            group_by(state) %>%
             summarise(lmw_weight = mean(lmw_weight)) %>% ungroup() %>%
-            right_join(state_data, by = c("Unit" = "state")) %>%
+            right_join(state_data, by = "state") %>%
             ggplot() +
             geom_polygon(aes(x=long, y=lat, group=group, fill=lmw_weight), color="black", size = 0.2) +
             scale_fill_continuous(name= paste0("Observation implied weight"),
                                   low = "#9dc4e4", high = "#3787c8", na.value = "white") +
-            geom_text(data = map_plot_data, aes(c_long, c_lat, label = Unit),
+            geom_text(data = map_plot_data, aes(c_long, c_lat, label = state),
                       color = "black", size = 5) +
             ggthemes::theme_map() + implied_plot_tyle
         } else {
@@ -1071,10 +1012,35 @@ server = function(input, output){
                       color = "black", size = 5) +
             ggthemes::theme_map() + implied_plot_tyle  
         }
+        
       }
+      
       return(map_plot)
     }
-    MapPlot(by_time = input$implied_unit_by_time, time_value = as.numeric(input$time_value), shade=input$shade)
+    
+    ################ Implied Weighted Years ################
+    
+    
+    ################ Render Plot ################
+    if (input$implied_population) {
+      if (input$implied_population_by_time) {
+        if (input$implied_map) {
+          MapPlot(year_value = input$year_value, shade=input$shade)
+        } else {
+          
+        }
+        
+      } else {
+        if (input$implied_map) {
+          if (input$shade) {
+            MapPlot(year_value = NULL, shade=TRUE)
+          } else {
+            MapPlot(year_value = NULL, shade=FALSE)
+          } 
+        }
+      }
+    } 
+    
   })
 }
 
