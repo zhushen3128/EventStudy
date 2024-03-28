@@ -40,24 +40,26 @@ source("util.R")
 
 obs_colors <- c(Treat = "#9dc4e4", 
                 Control = "#c6e0b4", 
+                LimitAnticipate = "#ffc001", 
+                Dissipate ="#f56c5b", 
                 Invalid = "white")
 
-# ess_obs_colors <- c(IdealTreat = "#3293e3", 
-#                     IdealControl = "#69b334", 
-#                     InvTreat = "#c5dbed", 
-#                     InvControl = "#ddedd1", 
-#                     LimitAnticipate = "#ffc001", 
-#                     DelayOnset = "#D2691E", 
-#                     Dissipate = "#f56c5b",
-#                     InvalidTreat = "#e1e1e1", 
-#                     InvalidControl = "#fafafa")
+obs_usual_colors <- c(Treat = "#9dc4e4", 
+                      Control = "#c6e0b4", 
+                      LimitAnticipate = "#ffc001", 
+                      DelayOnset = "#D2691E", 
+                      Dissipate ="#f56c5b", 
+                      Invalid = "white")
 
-ess_obs_colors <- c(IdealExperiment= "#3293e3", 
-                    TimeInvariance = "#69b334", 
-                    LimitedAnticipation = "#ffc001", 
-                    DelayedOnset = "#D2691E", 
-                    EffectDissipation = "#f56c5b",
-                    Invalid = "#e1e1e1")
+ess_obs_colors <- c(IdealTreat = "#3293e3", 
+                    IdealControl = "#69b334", 
+                    InvTreat = "#c5dbed", 
+                    InvControl = "#ddedd1", 
+                    LimitAnticipate = "#ffc001", 
+                    DelayOnset = "#D2691E", 
+                    Dissipate = "#f56c5b",
+                    InvalidTreat = "#e1e1e1", 
+                    InvalidControl = "#fafafa")
 
 panelview_plot_tyle <- 
   theme_bw() + 
@@ -770,7 +772,7 @@ server = function(input, output){
     data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
     data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "twfe")
+    GetESS(data = data, bal_covariates = covar_names, method = "twfe")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -784,7 +786,7 @@ server = function(input, output){
     data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
     data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "experiment")
+    GetESS(data = data, bal_covariates = covar_names, method = "experiment")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -798,7 +800,7 @@ server = function(input, output){
     data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
     data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "invariance")
+    GetESS(data = data, bal_covariates = covar_names, method = "invariance")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -812,7 +814,7 @@ server = function(input, output){
     data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
     data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "anticipate")
+    GetESS(data = data, bal_covariates = covar_names, method = "anticipate")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -826,7 +828,7 @@ server = function(input, output){
     data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
     data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "delay")
+    GetESS(data = data, bal_covariates = covar_names, method = "delay")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -840,7 +842,7 @@ server = function(input, output){
     data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
     data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "dissipate")
+    GetESS(data = data, bal_covariates = covar_names, method = "dissipate")
   }, 
   striped = TRUE,
   spacing = "l",

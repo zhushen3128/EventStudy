@@ -10,7 +10,8 @@ ESS <- function(w) {
 # GetESS function takes in the augmented data with dummy columns and the lmw_weights column - from the TWFE model specified by the user 
 ## arg: 
 ## 
-GetESS = function(data, t0, t1, bal_covariates, method = c("twfe", "experiment", "invariance", "anticipate", "delay", "dissipate")) {
+
+GetESS = function(data, bal_covariates, method = c("twfe", "experiment", "invariance", "anticipate", "delay", "dissipate")) {
   bal_covariates_names = paste("X", 1:length(bal_covariates), sep = "")
   # Now compute the Balancing weights 
   bal = list()
@@ -24,8 +25,8 @@ GetESS = function(data, t0, t1, bal_covariates, method = c("twfe", "experiment",
   if (method == "experiment") {
     # Setting 1: ideal experiment
     df = data %>% 
-      filter(group_ind == "IdealExperiment") %>% 
-      mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
+      filter(group_ind %in% c("IdealTreat", "IdealControl")) %>% 
+      mutate(treat_ind = ifelse(group_ind == "IdealTreat", 1, 0)) %>% 
       mutate(treat_ind = factor(treat_ind)) %>% 
       dplyr::select(X, treat_ind, any_of(bal_covariates_names), Outcome) %>% as.data.frame()
     names(df) = c("X", "t", bal_covariates_names, "Y")
@@ -40,8 +41,8 @@ GetESS = function(data, t0, t1, bal_covariates, method = c("twfe", "experiment",
   } else if (method == "invariance") {
     # Setting 2: ideal experiment + invariance to time shifts 
     df = data %>% 
-      filter(group_ind %in% c("IdealExperiment", "TimeInvariance")) %>% 
-      mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
+      filter(group_ind %in% c("IdealTreat", "IdealControl", "InvTreat", "InvControl")) %>% 
+      mutate(treat_ind = ifelse(group_ind %in% c("IdealTreat", "InvTreat"), 1, 0)) %>% 
       mutate(treat_ind = factor(treat_ind)) %>% 
       dplyr::select(X, treat_ind, any_of(bal_covariates_names), Outcome) %>% as.data.frame()
     names(df) = c("X", "t", bal_covariates_names, "Y")
@@ -56,8 +57,8 @@ GetESS = function(data, t0, t1, bal_covariates, method = c("twfe", "experiment",
   } else if (method == "anticipate") {
     # Setting 3: after invoking the limited anticipation assumption 
     df = data %>% 
-      filter(group_ind %in% c("IdealExperiment", "TimeInvariance", "LimitedAnticipation")) %>% 
-      mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
+      filter(group_ind %in% c("IdealTreat", "IdealControl", "InvTreat", "InvControl", "LimitAnticipate")) %>% 
+      mutate(treat_ind = ifelse(group_ind %in% c("IdealTreat", "InvTreat"), 1, 0)) %>% 
       mutate(treat_ind = factor(treat_ind)) %>% 
       dplyr::select(X, treat_ind, any_of(bal_covariates_names), Outcome) %>% as.data.frame()
     names(df) = c("X", "t", bal_covariates_names, "Y")
@@ -72,8 +73,9 @@ GetESS = function(data, t0, t1, bal_covariates, method = c("twfe", "experiment",
   } else if (method == "delay") {
     # Setting 4: after invoking the delayed treatment onset assumption 
     df = data %>% 
-      filter(group_ind %in% c("IdealExperiment", "TimeInvariance", "LimitedAnticipation", "DelayedOnset")) %>% 
-      mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
+      filter(group_ind %in% c("IdealTreat", "IdealControl", "InvTreat", "InvControl", 
+                              "LimitAnticipate", "DelayOnset")) %>% 
+      mutate(treat_ind = ifelse(group_ind %in% c("IdealTreat", "InvTreat"), 1, 0)) %>% 
       mutate(treat_ind = factor(treat_ind)) %>% 
       dplyr::select(X, treat_ind, any_of(bal_covariates_names), Outcome) %>% as.data.frame()
     names(df) = c("X", "t", bal_covariates_names, "Y")
@@ -88,7 +90,7 @@ GetESS = function(data, t0, t1, bal_covariates, method = c("twfe", "experiment",
   } else if (method == "dissipate") {
     # Setting 5: after invoking the treatment effect dissipation assumption 
     df = data %>% 
-      mutate(treat_ind = ifelse(time_til == t1-t0, 1, 0)) %>% 
+      mutate(treat_ind = ifelse(group_ind %in% c("IdealTreat", "InvTreat"), 1, 0)) %>% 
       dplyr::select(X, treat_ind, any_of(bal_covariates_names), Outcome) %>% as.data.frame()
     names(df) = c("X", "t", bal_covariates_names, "Y")
     sbwatt_object_5 = tryCatch(sbw(dat = df, ind = "t", out = "Y", bal = bal), error=function(e) {NULL})
@@ -166,12 +168,15 @@ PlotInfluence = function(data, inf_all, t0, t1, metric) {
       geom_segment(linetype = "solid", linewidth = 0.3) + 
       labs(x = "Observation Index", y = "SIC", color = "Observation Group") +
       geom_text(aes(x = X, y = SIC, label = labels1), size = 3, vjust = -1) +
-      scale_color_manual(values = c(IdealExperiment = "#3293e3", 
-                                    TimeInvariance = "#69b334", 
-                                    LimitedAnticipation = "#ffc001", 
-                                    DelayedOnset = "#D2691E", 
-                                    EffectDissipation = "#f56c5b",
-                                    Invalid = "#e1e1e1")) +
+      scale_color_manual(values = c(IdealTreat = "#3293e3", 
+                                    IdealControl = "#69b334", 
+                                    InvTreat = "#c5dbed", 
+                                    InvControl = "#ddedd1", 
+                                    LimitAnticipate = "#ffc001", 
+                                    DelayOnset = "#D2691E", 
+                                    Dissipate = "#f56c5b",
+                                    InvalidTreat = "#e1e1e1", 
+                                    InvalidControl = "#fafafa")) +
       theme_bw()
     plt
     
@@ -182,12 +187,15 @@ PlotInfluence = function(data, inf_all, t0, t1, metric) {
       geom_segment(linetype = "solid", linewidth = 0.3) + 
       labs(x = "Observation Index", y = "SIC Scaled", color = "Observation Group") +
       geom_text(aes(x = X, y = SIC.Scaled, label = labels1), size = 3, vjust = -1) +
-      scale_color_manual(values = c(IdealExperiment = "#3293e3", 
-                                    TimeInvariance = "#69b334", 
-                                    LimitedAnticipation = "#ffc001", 
-                                    DelayedOnset = "#D2691E", 
-                                    EffectDissipation = "#f56c5b",
-                                    Invalid = "#e1e1e1")) +
+      scale_color_manual(values = c(IdealTreat = "#3293e3", 
+                                    IdealControl = "#69b334", 
+                                    InvTreat = "#c5dbed", 
+                                    InvControl = "#ddedd1", 
+                                    LimitAnticipate = "#ffc001", 
+                                    DelayOnset = "#D2691E", 
+                                    Dissipate = "#f56c5b",
+                                    InvalidTreat = "#e1e1e1", 
+                                    InvalidControl = "#fafafa")) +
       theme_bw()
     plt
     
@@ -198,12 +206,15 @@ PlotInfluence = function(data, inf_all, t0, t1, metric) {
       geom_segment(linetype = "solid", linewidth = 0.3) + 
       labs(x = "Observation Index", y = "Change in Point Estimate", color = "Observation Group") +
       geom_text(aes(x = X, y = Est.Change, label = labels1), size = 3, vjust = -1) +
-      scale_color_manual(values = c(IdealExperiment = "#3293e3", 
-                                    TimeInvariance = "#69b334", 
-                                    LimitedAnticipation = "#ffc001", 
-                                    DelayedOnset = "#D2691E", 
-                                    EffectDissipation = "#f56c5b",
-                                    Invalid = "#e1e1e1")) +
+      scale_color_manual(values = c(IdealTreat = "#3293e3", 
+                                    IdealControl = "#69b334", 
+                                    InvTreat = "#c5dbed", 
+                                    InvControl = "#ddedd1", 
+                                    LimitAnticipate = "#ffc001", 
+                                    DelayOnset = "#D2691E", 
+                                    Dissipate = "#f56c5b",
+                                    InvalidTreat = "#e1e1e1", 
+                                    InvalidControl = "#fafafa")) +
       theme_bw()
     plt
   }
@@ -372,7 +383,7 @@ GetObsGroup = function(data, t0, t1, estimand = "std") {
     inv_control_idx = setdiff(inv_control_set$X, ideal_control_set$X)
     
     anticipate_set = data %>% 
-      filter((Treatment == 0 & time_til < t1-t0 & t1 >= t0) | (Treatment == 0 & time_til != t1-t0) )
+      filter(Treatment == 0 & time_til < t1-t0)
     
     delay_set = data %>% 
       filter(Treatment == 1 & time_til < t1-t0)
@@ -382,13 +393,16 @@ GetObsGroup = function(data, t0, t1, estimand = "std") {
     
     # Create one column indicating the group for each observation 
     data_obs_group = data %>% 
-      mutate(group_ind = case_when(X %in% c(ideal_treat_idx, ideal_control_idx) ~ "IdealExperiment",
-                                   X %in% c(inv_treat_idx, inv_control_idx) ~ "TimeInvariance", 
-                                   X %in% anticipate_set$X ~ "LimitedAnticipation",
-                                   X %in% delay_set$X ~ "DelayedOnset",
-                                   X %in% dissipate_set$X ~ "EffectDissipation")) %>% 
-      mutate(group_ind = factor(group_ind, levels = c("IdealExperiment", "TimeInvariance", 
-                                                      "LimitedAnticipation", "DelayedOnset", "EffectDissipation")))
+      mutate(group_ind = case_when(X %in% ideal_treat_idx ~ "IdealTreat",
+                                   X %in% ideal_control_idx ~ "IdealControl",
+                                   X %in% inv_treat_idx ~ "InvTreat", 
+                                   X %in% inv_control_idx ~ "InvControl", 
+                                   X %in% delay_set$X ~ "DelayOnset",
+                                   X %in% anticipate_set$X ~ "LimitAnticipate",
+                                   X %in% dissipate_set$X ~ "Dissipate")) %>% 
+      mutate(group_ind = factor(group_ind, levels = c("IdealTreat", "IdealControl", 
+                                                      "InvTreat", "InvControl",
+                                                      "LimitAnticipate", "DelayOnset", "Dissipate")))
   } else if (estimand == "new") { 
     
     # define the valid control lead lag range
@@ -408,24 +422,23 @@ GetObsGroup = function(data, t0, t1, estimand = "std") {
     inv_treat_idx = setdiff(inv_treat_set$X, ideal_treat_set$X)
     inv_control_idx = setdiff(inv_control_set$X, ideal_control_set$X)
     
-    if (t1 >= t0) {
-      anticipate_set = data %>% 
-        filter(Treatment == 0 & time_til < min(time_til_lbound:time_til_ubound) & TreatStartTime != Inf) 
-    } else {
-      anticipate_set = data %>% 
-        filter(Treatment == 0 & time_til != t1-t0)
-    }
+    anticipate_set = data %>% 
+      filter(Treatment == 0 & time_til < min(time_til_lbound:time_til_ubound) & TreatStartTime != Inf)
+    
     dissipate_set = data %>% 
       filter(Treatment == 1 & time_til > max(time_til_lbound:time_til_ubound))
     
     # Create one column indicating the group for each observation 
     data_obs_group = data %>% 
-      mutate(group_ind = case_when(X %in% c(ideal_treat_idx, ideal_control_idx) ~ "IdealExperiment",
-                                   X %in% c(inv_treat_idx, inv_control_idx) ~ "TimeInvariance", 
-                                   X %in% anticipate_set$X ~ "LimitedAnticipation",
-                                   X %in% dissipate_set$X ~ "EffectDissipation")) %>% 
-      mutate(group_ind = factor(group_ind, levels = c("IdealExperiment", "TimeInvariance", 
-                                                      "LimitedAnticipation", "EffectDissipation")))
+      mutate(group_ind = case_when(X %in% ideal_treat_idx ~ "IdealTreat",
+                                   X %in% ideal_control_idx ~ "IdealControl",
+                                   X %in% inv_treat_idx ~ "InvTreat", 
+                                   X %in% inv_control_idx ~ "InvControl", 
+                                   X %in% anticipate_set$X ~ "LimitAnticipate",
+                                   X %in% dissipate_set$X ~ "Dissipate")) %>% 
+      mutate(group_ind = factor(group_ind, levels = c("IdealTreat", "IdealControl", 
+                                                      "InvTreat", "InvControl",
+                                                      "LimitAnticipate", "Dissipate")))
     
   } else {
     stop("Estimand to be specified as `std` or `new`. ")
