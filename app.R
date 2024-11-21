@@ -165,23 +165,23 @@ ui <- fluidPage(
                           
                           h4("Estimand"), 
                           radioButtons("estimand1", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, >t_0, t_1}\\)" = "new",
-                                         "ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
+                                       c("ATE\\(^{P}_{t_y} (t_1, t_p)\\)" = "new",
+                                         "ATE\\(^{P}_{t_y} (t_1, \\infty)\\)" = "std")),
                           withMathJax(),
-                          helpText('Estimand can be ATE\\(_{t_0, >t_0, t_1}\\), which is the average causal 
-                      effect the target population observed at time \\(t_1\\) from adopting the treatment 
-                      for the first time at time \\(t_0\\) to adopting the treatment sometime after time \\(t_0\\).'), 
-                          helpText('A special case of the estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
-                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
-                     time at time \\(t_0\\) to never adopting the treatment.'), 
+                          helpText('Estimand can be ATE\\(^{P}_{t_y} (t_1, t_p)\\), which is the average causal 
+                      effect the target population observed at time \\(t_y\\) from adopting the treatment 
+                      for the first time at time \\(t_1\\) to adopting the treatment sometime after time \\(t_1\\).'), 
+                          helpText('A special case of the estimand is ATE\\(^{P}_{t_y} (t_1, \\infty)\\), which is is the average causal 
+                      effect in the target population observed at time \\(t_y\\) from adopting the treatment for the first 
+                     time at time \\(t_1\\) to never adopting the treatment.'), 
                           
-                          numericInput("t0_1", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
+                          numericInput("t1_1", "What is the \\(t_1\\) in the target estimand? ", value = 1975), 
                           withMathJax(),
-                          helpText('\\(t_0\\) denotes the treatment initiation time.'),
+                          helpText('\\(t_1\\) denotes the target treatment initiation time.'),
                           
-                          numericInput("t1_1", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
+                          numericInput("ty_1", "What is the \\(t_y\\) in the target estimand? ", value = 1980), 
                           withMathJax(),
-                          helpText('\\(t_1\\) denotes the treatment initiation time.'),
+                          helpText('\\(t_y\\) denotes the outcome measurement time.'),
                           
                           # Horizontal line 
                           tags$hr(), 
@@ -191,7 +191,7 @@ ui <- fluidPage(
                           checkboxInput("invariance", 'Time Shift Invariance. ', FALSE), 
                           checkboxInput("anticipation", 'Limited Treatment Anticipation.', FALSE), 
                           conditionalPanel(
-                            condition = "input.estimand == 'std1'",
+                            condition = "input.estimand1 == 'std'",
                             checkboxInput("delay", 'Delayed Onset of Treatment Effect.', FALSE)
                           ), 
                           checkboxInput("washout", 'Treatment Effect Dissipation.', FALSE), 
@@ -207,25 +207,25 @@ ui <- fluidPage(
                         sidebarPanel(
                           h4("Estimand"), 
                           radioButtons("estimand6", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
+                                       c("ATE\\(^{P}_{t_y} (t_1, \\infty)\\)" = "std")),
                           withMathJax(),
-                          helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
-                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
-                     time at time \\(t_0\\) to never adopting the treatment.'), 
+                          helpText('Estimand is ATE\\(^{P}_{t_y} (t_1, \\infty)\\), which is is the average causal 
+                      effect in the target population observed at time \\(t_y\\) from adopting the treatment for the first 
+                     time at time \\(t_1\\) to never adopting the treatment.'), 
                           
-                          numericInput("t0_6", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
+                          numericInput("t1_6", "What is the \\(t_1\\) in the target estimand? ", value = 1975), 
                           withMathJax(),
-                          helpText('\\(t_0\\) denotes the treatment initiation time.'),
+                          helpText('\\(t_1\\) denotes the target treatment initiation time.'),
                           
-                          numericInput("t1_6", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
+                          numericInput("ty_6", "What is the \\(t_y\\) in the target estimand? ", value = 1980), 
                           withMathJax(),
-                          helpText('\\(t_1\\) denotes the treatment initiation time.'), 
+                          helpText('\\(t_y\\) denotes the outcome measurement time.'), 
                           
                           # Horizontal line 
                           tags$hr(), 
                           h4("Regression"), 
                           h5("If to fit the dynamic TWFE model with the following form, please specify the minimum and maximum relative treatment periods \\(a\\) and \\(b\\)."), 
-                          h5("\\(Y_{it} = \\alpha_i + \\beta_t + \\sum_{l = a}^{b} \\tau_l \\mathbf{1}_{l = t_i - F_i}\\)."), 
+                          h5("\\(Y_{it} = \\alpha_i + \\beta_t + \\sum_{l = a}^{b} \\tau_l \\mathbf{1}_{l = t_i - G_i}\\)."), 
                           h5("\\(a\\) and \\(b\\) in the dynamic specification define the treatment horizon."), 
                           h5("Specifically, we allow anticipation effects due to the treatment \\(-a\\) periods 
                           after the current time point and carryover effects due to the treatment \\(b\\) periods 
@@ -247,19 +247,19 @@ ui <- fluidPage(
                         sidebarPanel(
                           h4("Estimand"), 
                           radioButtons("estimand2", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
+                                       c("ATE\\(^{P}_{t_y} (t_1, \\infty)\\)" = "std")),
                           withMathJax(),
-                          helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
-                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
-                     time at time \\(t_0\\) to never adopting the treatment.'), 
+                          helpText('Estimand is ATE\\(^{P}_{t_y} (t_1, \\infty)\\), which is is the average causal 
+                      effect in the target population observed at time \\(t_y\\) from adopting the treatment for the first 
+                     time at time \\(t_1\\) to never adopting the treatment.'), 
                           
-                          numericInput("t0_2", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
+                          numericInput("t1_2", "What is the \\(t_1\\) in the target estimand? ", value = 1975), 
                           withMathJax(),
-                          helpText('\\(t_0\\) denotes the treatment initiation time.'),
+                          helpText('\\(t_1\\) denotes the target treatment initiation time.'),
                           
-                          numericInput("t1_2", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
+                          numericInput("ty_2", "What is the \\(t_y\\) in the target estimand? ", value = 1980), 
                           withMathJax(),
-                          helpText('\\(t_1\\) denotes the treatment initiation time.'),
+                          helpText('\\(t_y\\) denotes the outcome measurement time.'),
                           
                           # Horizontal line 
                           tags$hr(), 
@@ -326,19 +326,19 @@ ui <- fluidPage(
                         sidebarPanel(
                           h4("Estimand"), 
                           radioButtons("estimand3", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
+                                       c("ATE\\(^{P}_{t_y} (t_1, \\infty)\\)" = "std")),
                           withMathJax(),
-                          helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
-                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
-                     time at time \\(t_0\\) to never adopting the treatment.'), 
+                          helpText('Estimand is ATE\\(^{P}_{t_y} (t_1, \\infty)\\), which is is the average causal 
+                      effect in the target population observed at time \\(t_y\\) from adopting the treatment for the first 
+                     time at time \\(t_1\\) to never adopting the treatment.'), 
                           
-                          numericInput("t0_4", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
+                          numericInput("t1_4", "What is the \\(t_1\\) in the target estimand? ", value = 1975), 
                           withMathJax(),
-                          helpText('\\(t_0\\) denotes the treatment initiation time.'),
+                          helpText('\\(t_1\\) denotes the target treatment initiation time.'),
                           
-                          numericInput("t1_4", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
+                          numericInput("ty_4", "What is the \\(t_y\\) in the target estimand? ", value = 1980), 
                           withMathJax(),
-                          helpText('\\(t_1\\) denotes the treatment initiation time.'),
+                          helpText('\\(t_y\\) denotes the treatment initiation time.'),
                           
                           # Horizontal line 
                           tags$hr(), 
@@ -382,35 +382,34 @@ ui <- fluidPage(
              tabPanel("Sample Influence",
                       sidebarLayout(
                         sidebarPanel(
-                          h4("Estimand"), 
+                          h4("Estimand"),
                           radioButtons("estimand5", "Choose the estimand:",
-                                       c("ATE\\(_{t_0, \\infty, t_1}\\)" = "std")),
+                                       c("ATE\\(^{P}_{t_y} (t_1, \\infty)\\)" = "std")),
                           withMathJax(),
-                          helpText('Estimand is ATE\\(_{t_0, \\infty, t_1}\\), which is is the average causal 
-                      effect in the target population observed at time \\(t_1\\) from adopting the treatment for the first 
-                     time at time \\(t_0\\) to never adopting the treatment.'), 
+                          helpText('Estimand is ATE\\(^{P}_{t_y} (t_1, \\infty)\\), which is is the average causal 
+                      effect in the target population observed at time \\(t_y\\) from adopting the treatment for the first 
+                     time at time \\(t_1\\) to never adopting the treatment.'), 
                           
-                          
-                          numericInput("t0_5", "What is the \\(t_0\\) in the target estimand? ", value = 1975), 
+                          numericInput("t1_5", "What is the \\(t_1\\) in the target estimand? ", value = 1975),
                           withMathJax(),
-                          helpText('\\(t_0\\) denotes the treatment initiation time.'),
-                          
-                          numericInput("t1_5", "What is the \\(t_1\\) in the target estimand? ", value = 1980), 
+                          helpText('\\(t_1\\) denotes the target treatment initiation time.'),
+
+                          numericInput("ty_5", "What is the \\(t_y\\) in the target estimand? ", value = 1980),
                           withMathJax(),
-                          helpText('\\(t_1\\) denotes the treatment initiation time.'),
-                          
+                          helpText('\\(t_y\\) denotes the outcome measurement time.'),
+
                           # Horizontal line
                           tags$hr(),
                           selectInput("influence_metric", "What influence metric to show:",
-                                      c("Change of point estimate due to each observation." = "est_change", 
+                                      c("Change of point estimate due to each observation." = "est_change",
                                         "Exact SIC of each observation." = "sic",
-                                        "Scaled SIC of each observation." = "sic_scaled")), 
-                          
-                          # Horizontal line 
-                          tags$hr(), 
-                          h4("Download Table with Influence of Each Observation"), 
+                                        "Scaled SIC of each observation." = "sic_scaled")),
+
+                          # Horizontal line
+                          tags$hr(),
+                          h4("Download Table with Influence of Each Observation"),
                           downloadButton("download_inf", "Download")
-                        ), 
+                        ),
                         mainPanel(
                           plotOutput("infuence_plot_panel", height = "600px", width = "1000px"),
                           plotlyOutput("infuence_plot", height = "600px", width = "1000px")
@@ -492,9 +491,9 @@ server = function(input, output){
   
   # reactive data frame of the study data with calculated sample influences; will be used for SIC plotting 
   inf_res = reactive({ 
-    data = GetImpliedWeights(input_data_augment(), t0 = input$t0_5, t1 = input$t1_5, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data, t0 = input$t0_5, t1 = input$t1_5, estimand = "std")
-    GetInfluence(data = data, t0 = input$t0_5, t1 = input$t1_5, l_min = input$l_min, l_max = input$l_max) 
+    data = GetImpliedWeights(input_data_augment(), t0 = input$t1_5, t1 = input$ty_5, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data = data, t0 = input$t1_5, t1 = input$ty_5, estimand = "std")
+    GetInfluence(data = data, t0 = input$t1_5, t1 = input$ty_5, l_min = input$l_min, l_max = input$l_max) 
   })
   
   # Panel plotting 
@@ -539,42 +538,42 @@ server = function(input, output){
     
     if(input$estimand1 == "new") {
       # define the valid control lead lag range
-      time_til_ubound <- input$t1_1-input$t0_1
-      time_til_lbound <- input$t1_1-max(panel_data()$Time)
+      time_til_ubound <- input$ty_1-input$t1_1
+      time_til_lbound <- input$ty_1-max(panel_data()$Time)
       
       if (input$invariance) {
         panelview_data = panel_data() %>% 
-          mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+          mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
                                     ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Invalid")))
         if (input$anticipation) {
           if (input$washout) {
             panelview_data = panel_data() %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+              mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
                                         ifelse(time_til > max(time_til_lbound:time_til_ubound), "Control", 
                                                ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Control"))))
           } else {
             panelview_data = panel_data() %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+              mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
                                         ifelse(time_til > max(time_til_lbound:time_til_ubound), "Invalid", 
                                                ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Control"))))
           }
         } else {
           if (input$washout) {
             panelview_data = panel_data() %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+              mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
                                         ifelse(time_til > max(time_til_lbound:time_til_ubound), "Control", 
                                                ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Invalid"))))
           } else {
             panelview_data = panel_data() %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+              mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
                                         ifelse(time_til > max(time_til_lbound:time_til_ubound), "Invalid", 
                                                ifelse(between(time_til, time_til_lbound, time_til_ubound) | time_til==-999, "Control", "Invalid"))))
           }
         }
       } else {
         panelview_data = panel_data() %>% 
-          mutate(group_ind = ifelse(TreatStartTime == input$t0_1 & Time == input$t1_1, "Treat", 
-                                    ifelse(Time == input$t1_1 & (between(time_til, time_til_lbound, time_til_ubound) | time_til==-999), "Control", "Invalid")))
+          mutate(group_ind = ifelse(TreatStartTime == input$t1_1 & Time == input$ty_1, "Treat", 
+                                    ifelse(Time == input$ty_1 & (between(time_til, time_til_lbound, time_til_ubound) | time_til==-999), "Control", "Invalid")))
       }
       
       if (!input$highlight) {
@@ -593,7 +592,7 @@ server = function(input, output){
           panelview_plot_tyle
         
       } else {
-        panelview_data = GetObsGroup(panel_data(), t0 = input$t0_1, t1 = input$t1_1, estimand = "new") 
+        panelview_data = GetObsGroup(panel_data(), t0 = input$t1_1, t1 = input$ty_1, estimand = "new") 
         panelview_data = panelview_data %>% 
           mutate(Time = factor(Time))
         
@@ -610,54 +609,54 @@ server = function(input, output){
       } 
     } else {
       panelview_data = panel_data() %>% 
-        mutate(group_ind = ifelse(TreatStartTime == input$t0_1 & Time == input$t1_1, "Treat", 
-                                  ifelse(TreatStartTime == Inf & Time == input$t1_1, "Control", "Invalid")))
+        mutate(group_ind = ifelse(TreatStartTime == input$t1_1 & Time == input$ty_1, "Treat", 
+                                  ifelse(TreatStartTime == Inf & Time == input$ty_1, "Control", "Invalid")))
       if (input$invariance) {
         panelview_data = panelview_data %>% 
-          mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+          mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
                                     ifelse(time_til == -999, "Control", "Invalid")))
         if (input$anticipation) {
           panelview_data = panelview_data %>% 
-            mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+            mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
                                       ifelse(Treatment == 0, "Control", "Invalid")))
           if (input$washout) {
             panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
-                                        ifelse((Treatment == 0 | time_til > input$t1_1-input$t0_1), "Control", "Invalid")))
+              mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
+                                        ifelse((Treatment == 0 | time_til > input$ty_1-input$t1_1), "Control", "Invalid")))
             if (input$delay) {
               panelview_data = panelview_data %>% 
-                mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", "Control"))
+                mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", "Control"))
             }
           } else {
             if (input$delay) {
               panelview_data = panelview_data %>% 
-                mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
-                                          ifelse(time_til < input$t1_1-input$t0_1, "Control", "Invalid")))
+                mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
+                                          ifelse(time_til < input$ty_1-input$t1_1, "Control", "Invalid")))
             }
           }
         } else {
           # if limited anticipation does not hold 
           if (input$washout) {
             panelview_data = panelview_data %>% 
-              mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
-                                        ifelse(time_til > input$t1_1-input$t0_1 | time_til == -999, "Control", "Invalid")))
+              mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
+                                        ifelse(time_til > input$ty_1-input$t1_1 | time_til == -999, "Control", "Invalid")))
             if (input$delay) {
               panelview_data = panelview_data %>% 
-                mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
+                mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
                                           ifelse(Treatment == 1 | time_til == -999, "Control", "Invalid")))
             }
           } else {
             if (input$delay) {
               panelview_data = panelview_data %>% 
-                mutate(group_ind = ifelse(time_til == input$t1_1-input$t0_1, "Treat", 
-                                          ifelse((Treatment == 1 & time_til < input$t1_1-input$t0_1) | time_til == -999, "Control", "Invalid")))
+                mutate(group_ind = ifelse(time_til == input$ty_1-input$t1_1, "Treat", 
+                                          ifelse((Treatment == 1 & time_til < input$ty_1-input$t1_1) | time_til == -999, "Control", "Invalid")))
             }
           }
         }
       }
       
       if (input$highlight) {
-        panelview_data = GetObsGroup(panel_data(), t0 = input$t0_1, t1 = input$t1_1, estimand = "std")
+        panelview_data = GetObsGroup(panel_data(), t0 = input$t1_1, t1 = input$ty_1, estimand = "std")
         panelview_data = panelview_data %>% 
           mutate(Time = factor(Time))
         panelview = ggplot(panelview_data,
@@ -734,7 +733,7 @@ server = function(input, output){
   
   output$twfe_panelview = renderPlot({
     panelview_data = panel_data() %>% 
-      mutate(group_ind = ifelse(time_til == input$t1_6-input$t0_6, "Treat", "Control"), 
+      mutate(group_ind = ifelse(time_til == input$ty_6-input$t1_6, "Treat", "Control"), 
              Time = factor(Time),
              group_ind = factor(group_ind, levels = c("Treat", "Control", "Invalid")))
     
@@ -751,7 +750,7 @@ server = function(input, output){
   }, height = 600, width = 880)
   
   output$ess_plot = renderPlot({
-    panelview_data = GetObsGroup(panel_data(), t0 = input$t0_4, t1 = input$t1_4, estimand = "std") 
+    panelview_data = GetObsGroup(panel_data(), t0 = input$t1_4, t1 = input$ty_4, estimand = "std") 
     panelview_data = panelview_data %>% 
       mutate(Time = factor(Time))
     
@@ -767,10 +766,10 @@ server = function(input, output){
   }, height = 600, width = 880)
   
   output$twfe_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_4, t1 = input$ty_4, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data = data_augment_weight, t0 = input$t1_4, t1 = input$ty_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "twfe")
+    GetESS(data = data, t0 = input$t1_4, t1 = input$ty_4, bal_covariates = covar_names, method = "twfe")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -781,10 +780,10 @@ server = function(input, output){
   )
   
   output$balance_experiment_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_4, t1 = input$ty_4, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data = data_augment_weight, t0 = input$t1_4, t1 = input$ty_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "experiment")
+    GetESS(data = data, t0 = input$t1_4, t1 = input$ty_4, bal_covariates = covar_names, method = "experiment")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -795,10 +794,10 @@ server = function(input, output){
   )
   
   output$balance_invariance_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_4, t1 = input$ty_4, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data = data_augment_weight, t0 = input$t1_4, t1 = input$ty_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "invariance")
+    GetESS(data = data, t0 = input$t1_4, t1 = input$ty_4, bal_covariates = covar_names, method = "invariance")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -809,10 +808,10 @@ server = function(input, output){
   )
   
   output$balance_anticipate_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_4, t1 = input$ty_4, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data = data_augment_weight, t0 = input$t1_4, t1 = input$ty_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "anticipate")
+    GetESS(data = data, t0 = input$t1_4, t1 = input$ty_4, bal_covariates = covar_names, method = "anticipate")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -823,10 +822,10 @@ server = function(input, output){
   )
   
   output$balance_delay_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_4, t1 = input$ty_4, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data = data_augment_weight, t0 = input$t1_4, t1 = input$ty_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "delay")
+    GetESS(data = data, t0 = input$t1_4, t1 = input$ty_4, bal_covariates = covar_names, method = "delay")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -837,10 +836,10 @@ server = function(input, output){
   )
   
   output$balance_dissipate_ess = renderTable({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_4, t1 = input$t1_4, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_4, t1 = input$t1_4, estimand = "std")
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_4, t1 = input$ty_4, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data = data_augment_weight, t0 = input$t1_4, t1 = input$ty_4, estimand = "std")
     covar_names = str_split(input$covar_name, ",")[[1]]
-    GetESS(data = data, t0 = input$t0_4, t1 = input$t1_4, bal_covariates = covar_names, method = "dissipate")
+    GetESS(data = data, t0 = input$t1_4, t1 = input$ty_4, bal_covariates = covar_names, method = "dissipate")
   }, 
   striped = TRUE,
   spacing = "l",
@@ -851,7 +850,7 @@ server = function(input, output){
   )
   
   output$infuence_plot_panel = renderPlot({
-    panelview_data = GetObsGroup(panel_data(), t0 = input$t0_5, t1 = input$t1_5, estimand = "std") 
+    panelview_data = GetObsGroup(panel_data(), t0 = input$t1_5, t1 = input$ty_5, estimand = "std") 
     panelview_data = panelview_data %>% 
       mutate(Time = factor(Time))
     
@@ -868,23 +867,23 @@ server = function(input, output){
   
   output$infuence_plot = renderPlotly({
     
-    data = GetImpliedWeights(input_data_augment(), t0 = input$t0_5, t1 = input$t1_5, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data, t0 = input$t0_5, t1 = input$t1_5, estimand = "std")
+    data = GetImpliedWeights(input_data_augment(), t0 = input$t1_5, t1 = input$ty_5, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data, t0 = input$t1_5, t1 = input$ty_5, estimand = "std")
     
     if (input$influence_metric == "sic") {
-      change_plt = PlotInfluence(data = data, inf_all = inf_res(), input$t0_5, input$t1_5, metric = "sic")
+      change_plt = PlotInfluence(data = data, inf_all = inf_res(), input$t1_5, input$ty_5, metric = "sic")
       ggplotly(change_plt, tooltip = c("group_ind", "Unit", "Time", "TreatStartTime","Outcome","SIC"))
     } else if (input$influence_metric == "sic_scaled") {
-      change_plt = PlotInfluence(data = data, inf_all = inf_res(), input$t0_5, input$t1_5, metric = "sic_scaled")
+      change_plt = PlotInfluence(data = data, inf_all = inf_res(), input$t1_5, input$ty_5, metric = "sic_scaled")
       ggplotly(change_plt, tooltip = c("group_ind", "Unit", "Time", "TreatStartTime","Outcome","SIC.Scaled"))
     } else {
-      change_plt = PlotInfluence(data = data, inf_all = inf_res(), input$t0_5, input$t1_5, metric = "est_change")
+      change_plt = PlotInfluence(data = data, inf_all = inf_res(), input$t1_5, input$ty_5, metric = "est_change")
       ggplotly(change_plt, tooltip = c("group_ind", "Unit", "Time", "TreatStartTime","Outcome","Est.Change"))
     }
   })
   
   output$implied_unit_plot = renderPlotly({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max)
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_2, t1 = input$ty_2, l_min = input$l_min, l_max = input$l_max)
     
     if (input$implied_unit_by_time) {
       implied_unit_plot = data_augment_weight %>% 
@@ -920,7 +919,7 @@ server = function(input, output){
   
   
   output$implied_time_plot = renderPlotly({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max)
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_2, t1 = input$ty_2, l_min = input$l_min, l_max = input$l_max)
     if (input$implied_time_by_unit) {
       implied_time_plot = data_augment_weight %>% 
         dplyr::select(X, Unit, Time, Treatment, lmw_weight, time_til, treatment_component) %>%
@@ -980,7 +979,7 @@ server = function(input, output){
     ################ Implied Weighted States ################
     # Join the two datasets: map data and the value (lmw weight) for each observation
     
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max)
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_2, t1 = input$ty_2, l_min = input$l_min, l_max = input$l_max)
     map_plot_data = state_data %>% 
       left_join(data_augment_weight, by = c("state" = "Unit")) %>%
       dplyr::rename(Unit = state)
@@ -1090,8 +1089,8 @@ server = function(input, output){
   })
   
   lmw_output_download <- reactive({
-    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t0_2, t1 = input$t1_2, l_min = input$l_min, l_max = input$l_max)
-    data = GetObsGroup(data = data_augment_weight, t0 = input$t0_2, t1 = input$t1_2, estimand = input$estimand2)
+    data_augment_weight = GetImpliedWeights(data = input_data_augment(), t0 = input$t1_2, t1 = input$ty_2, l_min = input$l_min, l_max = input$l_max)
+    data = GetObsGroup(data = data_augment_weight, t0 = input$t1_2, t1 = input$ty_2, estimand = input$estimand2)
     
     covar_names = str_split(input$covar_name, ",")[[1]]
     col_names = paste("X", 1:length(covar_names), sep = "")
