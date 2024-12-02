@@ -12,6 +12,8 @@ observations on the estimator. This visualization tool aims to enhance
 the transparency of event study analyses and empower researchers to make
 well-informed decisions in their analysis.
 
+<img src="screenshot.jpeg" width="100%" style="display: block; margin: auto;" />
+
 ------------------------------------------------------------------------
 
 ## Table of Contents
@@ -38,22 +40,29 @@ working on event studies. It enables users to:
   population, analyze effective sample size (ESS) and information
   borrowing.
 
-The platform leverages `R` and `Shiny` to offer real-time interaction,
+The platform is based on `R` and `Shiny` to offer real-time interaction,
 allowing users to dynamically adjust parameters and observe results.
 
 ------------------------------------------------------------------------
 
 ## Features
 
-- **Interactive Visualizations**: \[List types of graphs or data
-  visualizations.\]
-- **Customizable Parameters**: Adjust inputs dynamically to observe
-  changes in outputs.
-- **Real-Time Data Analysis**: Upload datasets and generate immediate
-  insights.
-- **Downloadable Results**: Export visualizations or reports in various
-  formats.
-- **User-Friendly Interface**: Simple navigation for seamless operation.
+1.  **Customizable Parameters**: import your dataset (e.g., CSV files)
+    for analysis, specify in the dataset the variable name corresponding
+    to the outcome, the binary treatment, the unit of analysis (e.g.,
+    country, state, county), and the time (e.g., year, quarter, month).
+    *Note: we will not keep a copy of your dataset. All the interactive
+    analysis can be conducted locally.*
+
+<img src="parameter.jpeg" width="50%" style="display: block; margin: auto;" />
+
+2.  **Interactive Visualizations**: we provide the following
+    visualizations to guide you through the analysis of event studies.
+
+3.  **Real-Time Data Analysis and Diagnostics**:
+
+4.  **Downloadable Results**: You will have the option to download the
+    diagnostic measures.
 
 ------------------------------------------------------------------------
 
@@ -65,8 +74,14 @@ packages installed.
 ### Prerequisites
 
 - R (version \>= 4.0)
+
 - RStudio
+
 - Shiny package: Install using `install.packages("shiny")`
+
+- Required R packages for analysis including:
+
+  - 
 
 ### Steps
 
@@ -77,7 +92,8 @@ git clone https://github.com/zhushen3128/EventStudy.git
 cd EventStudy
 ```
 
-2.  Open app.R in RStudio.
+2.  Open `app.R` in RStudio. Remember to save the `util.R` file in the
+    same directory.
 
 3.  Run the app using:
 
@@ -90,7 +106,9 @@ runApp('app.R')
 
 - Start the Application: Run the Shiny app as described above.
 
-- Upload Data: Import datasets (e.g., CSV files) for analysis.
+- Upload Data: Import datasets (e.g., CSV files) for analysis. In the
+  GitHub repository, we provide a sample dataset named
+  `bacon_cleaned.cvs` which is used as the default dataset for the tool.
 
 - Explore Features: Use the interactive controls to adjust assumptions,
   modify parameters, and visualize outcomes.
