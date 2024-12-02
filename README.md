@@ -1,13 +1,6 @@
 Visualizing Event Studies
 ================
 
-- [Table of Contents](#table-of-contents)
-- [Introduction](#introduction)
-- [Features](#features)
-- [Installation](#installation)
-- [Contributing](#contributing)
-- [License](#license)
-
 Here you’ll find a visualization tool designed for researchers
 interested in analyzing event studies. This tool allows users to define
 their estimands, impose their assumptions, and select valid observations
